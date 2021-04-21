@@ -1,0 +1,9 @@
+
+train: ../DTCdataset/images/train  # 128 images
+val: ../DTCdataset/images/test  # 128 images
+
+# number of classes
+nc: 1
+
+# class names
+names: ['trash']
