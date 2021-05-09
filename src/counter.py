@@ -1,25 +1,22 @@
 # -*- coding: utf-8 --
-import cv2
-import numpy as np
 import time
 import os
+import csv
+import threading
+import datetime
+import random
+from collections import deque
+import cv2
+import numpy as np
 import torch
 import torch.backends.cudnn as cudnn
-import csv
-from sort import Sort
-from models import Darknet
-from utils import torch_utils
-from utils.utils import non_max_suppression, scale_coords
-from utils.datasets import letterbox
-from iou_tracking import Iou_Tracker
+
+from tracker.sort import Sort
+from tracker.iou_tracking import Iou_Tracker
+from utils.fpsrate import FpsWithTick
+from pathlib import Path
 from utils.count_utils import find_all_files
-import datetime
-from fpsrate import FpsWithTick
-import random
-import threading
-from ssd_src.ssd import build_ssd
-from collections import deque
-import math
+from detector.yolov5.setup_model import detect, make_model
 
 cudnn.benchmark = True
 
@@ -30,25 +27,19 @@ class Counter(object):
         self.fpsWithTick = FpsWithTick()
         self.frame_count = 0
         self.fps_count = 0
-        self.flag_of_recall_q = ''
-        self.flag_of_detection_q = ''
         self.p = 0
         self.q = deque()
-        self.i = 0
-        self.flag_of_realtime = True
         self.recallq = deque()
-        self.flag_of_detection_q = False
-        self.flag_of_recall_q = True
+        self.flag_of_realtime = True
         self.args = args
         self.path = self.args.save_dir_path
         self.conf_thres = self.args.conf_thres
         self.nms_thres = self.args.nms_thres
         self.img_size = self.args.img_size
-        self.device = torch_utils.select_device()
+        self.device = torch.device('cuda' if args.cuda else 'cpu')
         self.y_pred_list = []
         self.font = cv2.FONT_HERSHEY_DUPLEX
         self.max_age = 2
-        self.ssd_th = 0.4
         self.frame_rate = 20
         self.mode = self.args.mode
         self.tracking_alg = self.args.tracking_alg
@@ -60,19 +51,7 @@ class Counter(object):
         self.save_root_dir = self.path
 
         if self.model == 'yolo':
-            print("yolo")
-            self.net = Darknet(self.args.cfg, self.args.img_size)
-            self.net.load_state_dict(torch.load(
-                self.args.weights, map_location='cpu')['model'])
-            self.net.to(self.device).eval()
-        elif self.model == 'ssd':
-            print("ssd")
-            if torch.cuda.is_available():
-                torch.set_default_tensor_type('torch.cuda.FloatTensor')
-            self.net = build_ssd('test', 300, 2)
-            self.net.load_weights('./weightscomplete/v2r.pth')
-            self.net.eval()
-
+            self.model, self.names, self.webcam = make_model(self.args)
         self.prepare()
 
         f = open(os.path.join(self.save_root_dir, 'y_pred.csv'), "w")
@@ -173,8 +152,10 @@ class Counter(object):
             writer2.writerows(self.gps_list)
             gps_log.close()
             self.writer.writerows(self.y_pred_list)
+
         elif self.mode == 'jetson':
             self.counting_on_jetson()
+
         elif self.mode == 'realtime':
             for movie in self.movies:
                 print(movie)
@@ -373,61 +354,6 @@ class Counter(object):
 
     def detect_image(self, frame):
         if self.model == 'yolo':
-            img, _, _, _ = letterbox(frame, height=self.img_size)
-            # Normalize RGB
-            img = img[:, :, ::-1].transpose(2, 0, 1)
-            img = np.ascontiguousarray(img, dtype=np.float32)
-            img /= 255.0
-            img = torch.from_numpy(img).unsqueeze(0).to(self.device)
-
-            pred = self.net(img)
-            pred = pred[pred[:, :, 4] > self.conf_thres]
-            cords = []
-
-            if len(pred) > 0:
-                detections = non_max_suppression(
-                    pred.unsqueeze(0), self.conf_thres, self.nms_thres)[0]
-                if detections is not None:
-
-                    detections[:, :4] = scale_coords(
-                        self.img_size, detections[:, :4], frame.shape)
-
-                    for x1, y1, x2, y2, conf, cls_conf, cls in detections:
-                        pt = np.array(
-                            [x1.item(), y1.item(), x2.item(), y2.item(), conf.item()])
-                        cords.append(pt)
-
-            return cords
-
-        elif self.model == 'ssd':
-            x = cv2.resize(frame, (300, 300)).astype(np.float32)
-            x -= (104.0, 117.0, 123.0)
-
-            x = x.astype(np.float32)
-            x = x[:, :, ::-1].copy()
-
-            x = torch.from_numpy(x).permute(2, 0, 1)
-            xx = x.unsqueeze(0).to(self.device)
-            # if torch.cuda.is_available():
-            #    xx = xx.cuda()
-            y = self.net(xx)
-
-            detections = y.data
-            scale = torch.Tensor([frame.shape[1::-1], frame.shape[1::-1]]).view(4)
-            cords = []
-            # texts = []
-            for i in range(1, 2):
-                j = 0
-                while detections[0, i, j, 0] >= self.ssd_th:
-                    # score = detections[0, i, j, 0]
-                    # label_name = labels[i-1]
-                    # display_txt = '%s: %.2f' % (label_name, score)
-                    # label_name = labels[i-1]
-                    pt = (detections[0, i, j, 1:]*scale).cpu().numpy()
-                    cords.append(pt)
-                    # texts.append(display_txt)
-                    j += 1
-
             return cords
 
     def realtime_detection(self, path_to_movie):
@@ -458,10 +384,6 @@ class Counter(object):
                 break
             if self.video:
                 video.write(frame)
-
-    def create_tracker(self, tracking_alg, max_age, max_hit, line_down, movie_id,
-                       image_dir, basename, movie_date='',):
-        pass
 
     def recall_q2(self, line_down, height, movie_id, basename):
         LC = self.l/self.frame_rate
