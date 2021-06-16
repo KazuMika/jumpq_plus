@@ -1,9 +1,0 @@
-
-train: /home/quantan/DTCdataset/DTCcocoformat/images/train
-val: /home/quantan/DTCdataset/DTCcocoformat/images/test
-
-# number of classes
-nc: 1
-
-# class names
-names: ['trash']
