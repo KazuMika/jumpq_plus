@@ -57,68 +57,6 @@ class Counter(object):
         f = open(os.path.join(self.save_root_dir, 'y_pred.csv'), "w")
         self.writer = csv.writer(f, lineterminator='\n')
 
-    def prepare(self):
-        if self.mode == 'precision':
-            self.save_root_dir = self.path
-            self.image_dir = os.path.join(self.save_root_dir, 'images')
-            self.movie_dir = os.path.join(self.save_root_dir, 'movies')
-            if not os.path.exists(os.path.join(self.image_dir)):
-                os.makedirs(os.path.join(self.image_dir))
-            if not os.path.exists(os.path.join(self.movie_dir)):
-                os.makedirs(os.path.join(self.movie_dir))
-            if self.args.test:
-                self.movies = ['./testgomi2.mp4']
-            else:
-                self.movies = [movie for movie in find_all_files(
-                    '/home/quantan/back_kanen_1_8_data_mp4/') if '.mp4' in movie]
-                self.movies.sort()
-        elif self.mode == 'visualization':
-            self.save_root_dir = self.path
-            self.image_dir = os.path.join(self.save_root_dir, 'images')
-            self.movie_dir = os.path.join(self.save_root_dir, 'movies')
-            self.gps_datelist = []
-            self.gps_list = []
-            self.gps_dir = 'visualize_' + self.model
-            self.gps_image_dir = 'gps_count_images'
-            self.gps_location_dir = 'gps_locations_data'
-            if not os.path.exists(os.path.join(self.save_root_dir,
-                                               self.gps_dir, self.gps_image_dir)):
-                os.makedirs(os.path.join(self.save_root_dir,
-                                         self.gps_dir, self.gps_image_dir))
-            if not os.path.exists(os.path.join(self.save_root_dir,
-                                               self.gps_dir, self.gps_location_dir)):
-                os.makedirs(os.path.join(self.save_root_dir,
-                                         self.gps_dir, self.gps_location_dir))
-            self.movies = [movie for movie in find_all_files(
-                '/home/quantan/dataset/datavisual') if "CH1.264" in movie]
-            self.movies.sort()
-
-        elif self.mode == 'jetson':
-            self.save_root_dir = '/mnt/hdd1/'
-            self.save_image_dir = os.path.join(self.save_root_dir, 'image_results/')
-            self.save_movie_dir = os.path.join(self.save_root_dir, 'movie_results/')
-            if not os.path.exists(self.save_image_dir):
-                os.makedirs(self.save_image_dir)
-            if not os.path.exists(self.save_movie_dir):
-                os.makedirs(self.save_movie_dir)
-
-        elif self.mode == 'realtime':
-            self.save_root_dir = self.path
-            self.image_dir = os.path.join(self.save_root_dir, 'images')
-            self.movie_dir = os.path.join(self.save_root_dir, 'movies')
-            if not os.path.exists(os.path.join(self.image_dir)):
-                os.makedirs(os.path.join(self.image_dir))
-            if not os.path.exists(os.path.join(self.movie_dir)):
-                os.makedirs(os.path.join(self.movie_dir))
-            if self.args.test:
-                self.movies = ['./testgomi2.mp4']
-            else:
-                self.movies = [movie for movie in find_all_files(
-                    '/home/quantan/back_kanen_1_8_data_mp4/') if '.mp4' in movie]
-                self.movies.sort()
-        else:
-            pass
-
     def execution(self):
         if self.mode == 'precision':
             for movie in self.movies:
@@ -162,7 +100,6 @@ class Counter(object):
                 self.realtime_detection(movie)
 
             self.writer.writerows(self.y_pred_list)
-
         else:
             pass
 
@@ -221,18 +158,14 @@ class Counter(object):
         cap = cv2.VideoCapture(path_to_movie)
         basename = os.path.basename(path_to_movie)
         movie_date = path_to_movie.split('/')[-3]
-
         save_image_dir = os.path.join(
             self.save_root_dir, self.gps_dir, self.gps_image_dir)
         movie_id = basename[0:4]
-
         height = cap.get(4)
         line_down = int(9*(height/10))
-
         gps_path = path_to_movie.replace('H264/CH1.264', 'SNS/Sns.txt')
         if not os.path.exists(gps_path):
             return None
-
         f2 = open(gps_path, 'r')
         gpss = [gps.strip() for gps in f2.readlines()]
         gps_count = 0
