@@ -2,7 +2,7 @@ import argparse
 
 import yaml
 
-from wandb_utils import WandbLogger
+from yolov5.utils.wandb_logging.wandb_utils import WandbLogger
 
 WANDB_ARTIFACT_PREFIX = 'wandb-artifact://'
 

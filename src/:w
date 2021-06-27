@@ -35,7 +35,7 @@ vid_formats = ['mov', 'avi', 'mp4', 'mpg', 'mpeg', 'm4v', 'wmv', 'mkv']  # accep
 class Counter(object):
     def __init__(self, opt):
         self.opt = opt
-        self.source, weights, self.view_img, self.save_txt, self.imgsz, self.save_img = opt.source, opt.weights, opt.view_img, opt.save_txt, opt.img_size, opt.save_img
+        self.source, weights, self.view_img, self.save_txt, self.imgsz = opt.source, opt.weights, opt.view_img, opt.save_txt, opt.img_size
         save_dir = Path(increment_path(Path(opt.project) / opt.name, exist_ok=opt.exist_ok))  # increment run
         (save_dir / 'labels' if self.save_txt else save_dir).mkdir(parents=True, exist_ok=True)  # make dir
         self.save_dir = save_dir
@@ -46,7 +46,6 @@ class Counter(object):
         device = select_device(opt.device)
         self.half = device.type != 'cpu'  # half precision only supported on CUDA
         self.device = torch.device('cuda' if torch.cuda.is_available else 'cpu')
-        self.tracking_alg = 'iou'
 
         # Load model
         print(weights)
@@ -97,7 +96,7 @@ class Counter(object):
             else:
                 for movie in self.movies:
                     self.dataset = LoadImages(movie, img_size=self.imgsz, stride=self.stride)
-                    self.count(movie)
+                    self.realtime_detection(movie)
 
     def realtime_detection(self,  path_to_movie):
         basename = os.path.basename(path_to_movie).replace('.mp4', '')
@@ -127,40 +126,6 @@ class Counter(object):
             print(f"Results saved to {self.save_dir}{s}")
 
         print(f'Done. ({time.time() - time_0:.3f}s)')
-
-    def count(self,  path_to_movie):
-        basename = os.path.basename(path_to_movie).replace('.mp4', '')
-        movie_id = basename[0:4]
-        save_movie_path = os.path.join(self.save_dir.name, basename+'.mp4')
-        print(save_movie_path)
-        self.image_dir = './'
-        height = self.dataset.height
-        line_down = int(9*(height/10))
-        if self.tracking_alg == 'sort':
-            tracker = Sort(3, line_down, movie_id,
-                           './runs', '', basename, min_hits=3)
-        else:
-            tracker = Iou_Tracker(
-                line_down, self.image_dir, movie_id, 3, '', basename)
-        for path, img, im0s, vid_cap in self.dataset:
-            self.vid_cap = vid_cap
-
-            img2 = img.copy()
-
-            img = torch.from_numpy(img).to(self.device)
-            img = img.half() if self.half else img.float()  # uint8 to fp16/32
-            img /= 255.0  # 0 - 255 to 0.0 - 1.0
-            if img.ndimension() == 3:
-                img = img.unsqueeze(0)
-
-            self.images_q.append([img, im0s, path])
-            result = self.detect(self.images_q.popleft())
-            tracker.update(result, img2)
-
-        self.flag_of_realtime = False
-        if self.save_txt or self.save_img:
-            s = f"\n{len(list(self.save_dir.glob('labels/*.txt')))} labels saved to {self.save_dir / 'labels'}" if self.save_txt else ''
-            print(f"Results saved to {self.save_dir}{s}")
 
     def recall_q2(self, line_down, height, movie_id, basename):
         LC = self.l/self.frame_rate
@@ -214,27 +179,35 @@ class Counter(object):
 
     def detect(self, images):
         img, im0s, path = images
+        time_1 = time_synchronized()
         pred = self.model(img, augment=self.opt.augment)[0]
 
+        # Apply NMS
         pred = non_max_suppression(pred, self.opt.conf_thres, self.opt.iou_thres, classes=self.opt.classes, agnostic=self.opt.agnostic_nms)
+        time_2 = time_synchronized()
+        print(pred)
 
+        # Apply Classifier
+
+        # Process detections
         result = []
         for i, det in enumerate(pred):  # detections per image
+            print(det)
             if self.webcam:  # batch_size >= 1
-                p, s, im0, _ = path[i], '%g: ' % i, im0s[i].copy(), self.dataset.count
+                p, s, im0, frame = path[i], '%g: ' % i, im0s[i].copy(), self.dataset.count
             else:
-                p, s, im0, _ = path, '', im0s, getattr(self.dataset, 'frame', 0)
+                p, s, im0, frame = path, '', im0s, getattr(self.dataset, 'frame', 0)
 
             p = Path(p)  # to Path
             save_path = str(self.save_dir / p.name)  # img.jpg
             s += '%gx%g ' % img.shape[2:]  # print string
             if len(det):
                 det[:, :4] = scale_coords(img.shape[2:], det[:, :4], im0.shape).round()
-                det = det.cpu().numpy()[0]
-                det = det.astype(np.int64)
-                cord = det[:4]
-                result.append(cord)
 
+            result.append(det)
+
+            print(f'{s}Done. ({time_2 - time_1:.3f}s)')
+            print(frame)
             if self.save_img:
                 if self.dataset.mode == 'image':
                     cv2.imwrite(self.save_path, im0)
@@ -253,4 +226,4 @@ class Counter(object):
                         vid_writer = cv2.VideoWriter(save_path, cv2.VideoWriter_fourcc(*'mp4v'), fps, (w, h))
                     vid_writer.write(im0)
 
-        return result
+        return det

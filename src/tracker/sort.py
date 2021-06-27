@@ -2,7 +2,7 @@
 from __future__ import print_function
 from numba import jit
 import numpy as np
-from sklearn.utils.linear_assignment_ import linear_assignment
+from scipy.optimize import linear_sum_assignment as linear_assignment
 # from scipy.optimize import linear_sum_assignment as linear_assignment
 import time
 from filterpy.kalman import KalmanFilter
@@ -89,7 +89,7 @@ class KalmanBoxTracker(object):
 
 
 class Sort(object):
-    def __init__(self, max_age=2, min_hits=3, line_down=None, movie_id='', save_image_dir=None, movie_date='', basename='', save_movie_dir=None):
+    def __init__(self, max_age=2, line_down=None, movie_id='', save_image_dir=None, movie_date='', basename='', save_movie_dir=None, min_hits=3):
         """
         Sets key parameters for SORT
         """
@@ -316,6 +316,7 @@ def associate_detections_to_trackers(detections, trackers, iou_threshold=0):
             unmatched_detections.append(d)
     unmatched_trackers = []
     for t, trk in enumerate(trackers):
+        print(matched_indices)
         if(t not in matched_indices[:, 1]):
             unmatched_trackers.append(t)
 

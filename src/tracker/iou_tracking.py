@@ -8,7 +8,7 @@ import os
 
 
 class Iou_Tracker(object):
-    def __init__(self, line_down=None, save_image_dir=None, movie_id=None, max_age=2, movie_date='', base_name='', save_movie_dir=None):
+    def __init__(self, max_age=2, line_down=None, save_image_dir=None, movie_id=None, movie_date='', base_name='', save_movie_dir=None):
         self.line_down = line_down
         self.save_image_dir = save_image_dir
         self.save_movie_dir = save_movie_dir

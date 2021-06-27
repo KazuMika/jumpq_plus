@@ -46,7 +46,7 @@ class Counter(object):
         device = select_device(opt.device)
         self.half = device.type != 'cpu'  # half precision only supported on CUDA
         self.device = torch.device('cuda' if torch.cuda.is_available else 'cpu')
-        self.tracking_alg = 'iou'
+        self.tracking_alg = 'sort'
 
         # Load model
         print(weights)
@@ -133,7 +133,6 @@ class Counter(object):
         movie_id = basename[0:4]
         save_movie_path = os.path.join(self.save_dir.name, basename+'.mp4')
         print(save_movie_path)
-        self.image_dir = './'
         height = self.dataset.height
         line_down = int(9*(height/10))
         if self.tracking_alg == 'sort':
@@ -141,11 +140,9 @@ class Counter(object):
                            './runs', '', basename, min_hits=3)
         else:
             tracker = Iou_Tracker(
-                line_down, self.image_dir, movie_id, 3, '', basename)
+                line_down, self.image_dir, movie_id, self.max_age, '', basename)
         for path, img, im0s, vid_cap in self.dataset:
             self.vid_cap = vid_cap
-
-            img2 = img.copy()
 
             img = torch.from_numpy(img).to(self.device)
             img = img.half() if self.half else img.float()  # uint8 to fp16/32
@@ -155,7 +152,9 @@ class Counter(object):
 
             self.images_q.append([img, im0s, path])
             result = self.detect(self.images_q.popleft())
-            tracker.update(result, img2)
+            print(result)
+            print(type(result))
+            tracker.update(result)
 
         self.flag_of_realtime = False
         if self.save_txt or self.save_img:
@@ -231,9 +230,12 @@ class Counter(object):
             if len(det):
                 det[:, :4] = scale_coords(img.shape[2:], det[:, :4], im0.shape).round()
                 det = det.cpu().numpy()[0]
-                det = det.astype(np.int64)
                 cord = det[:4]
-                result.append(cord)
+                thred_hold = det[4]
+                nokonw = det[5]
+                print(thred_hold)
+                print(nokonw)
+                result.apppend(cord)
 
             if self.save_img:
                 if self.dataset.mode == 'image':

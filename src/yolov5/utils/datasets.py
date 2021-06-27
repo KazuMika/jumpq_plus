@@ -20,9 +20,9 @@ from PIL import Image, ExifTags
 from torch.utils.data import Dataset
 from tqdm import tqdm
 
-from utils.general import check_requirements, xyxy2xywh, xywh2xyxy, xywhn2xyxy, xyn2xy, segment2box, segments2boxes, \
+from yolov5.utils.general import check_requirements, xyxy2xywh, xywh2xyxy, xywhn2xyxy, xyn2xy, segment2box, segments2boxes, \
     resample_segments, clean_str
-from utils.torch_utils import torch_distributed_zero_first
+from yolov5.utils.torch_utils import torch_distributed_zero_first
 
 # Parameters
 help_url = 'https://github.com/ultralytics/yolov5/wiki/Train-Custom-Data'
@@ -134,6 +134,7 @@ class LoadImages:  # for inference
         images = [x for x in files if x.split('.')[-1].lower() in img_formats]
         videos = [x for x in files if x.split('.')[-1].lower() in vid_formats]
         ni, nv = len(images), len(videos)
+        self.width, self.height = None, None
 
         self.img_size = img_size
         self.stride = stride
@@ -143,6 +144,7 @@ class LoadImages:  # for inference
         self.mode = 'image'
         if any(videos):
             self.new_video(videos[0])  # new video
+            self.width, self.height = self.cap.get(3), self.cap.get(4)
         else:
             self.cap = None
         assert self.nf > 0, f'No images or videos found in {p}. ' \
@@ -344,7 +346,7 @@ def img2label_paths(img_paths):
     return ['txt'.join(x.replace(sa, sb, 1).rsplit(x.split('.')[-1], 1)) for x in img_paths]
 
 
-class LoadImagesAndLabels(Dataset):  # for training/testing
+class LoadImagesAndLabel(Dataset):  # for training/testing
     def __init__(self, path, img_size=640, batch_size=16, augment=False, hyp=None, rect=False, image_weights=False,
                  cache_images=False, single_cls=False, stride=32, pad=0.0, prefix=''):
         self.img_size = img_size
