@@ -203,7 +203,8 @@ class Sort(object):
             h = dets[i][3]-dets[i][1]
             y = int((dets[i][1]+(h*7/8)))
             if y < self.line_down:
-                trk = KalmanBoxTracker(dets[i, :])
+                print(dets[i])
+                trk = KalmanBoxTracker(dets[i].copy())
                 self.trackers.append(trk)
         i = len(self.trackers)
 
@@ -323,7 +324,7 @@ def associate_detections_to_trackers(detections, trackers, iou_threshold=0):
             unmatched_detections.append(d)
     unmatched_trackers = []
     for t, trk in enumerate(trackers):
-        print('marhes_indices:', matched_indices)
+        print(matched_indices)
         if(t not in matched_indices[:, 1]):
             unmatched_trackers.append(t)
 
