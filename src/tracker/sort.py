@@ -89,7 +89,14 @@ class KalmanBoxTracker(object):
 
 
 class Sort(object):
-    def __init__(self, max_age=2, line_down=None, movie_id='', save_image_dir=None, movie_date='', basename='', save_movie_dir=None, min_hits=3):
+    def __init__(self, max_age=2,
+                 line_down=None,
+                 movie_id='',
+                 save_image_dir=None,
+                 movie_date='',
+                 basename='',
+                 save_movie_dir=None,
+                 min_hits=3):
         """
         Sets key parameters for SORT
         """
@@ -316,7 +323,7 @@ def associate_detections_to_trackers(detections, trackers, iou_threshold=0):
             unmatched_detections.append(d)
     unmatched_trackers = []
     for t, trk in enumerate(trackers):
-        print(matched_indices)
+        print('marhes_indices:', matched_indices)
         if(t not in matched_indices[:, 1]):
             unmatched_trackers.append(t)
 

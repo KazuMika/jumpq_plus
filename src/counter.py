@@ -35,7 +35,8 @@ vid_formats = ['mov', 'avi', 'mp4', 'mpg', 'mpeg', 'm4v', 'wmv', 'mkv']  # accep
 class Counter(object):
     def __init__(self, opt):
         self.opt = opt
-        self.source, weights, self.view_img, self.save_txt, self.imgsz, self.save_img = opt.source, opt.weights, opt.view_img, opt.save_txt, opt.img_size, opt.save_img
+        self.source, weights, self.view_img, self.save_txt, self.imgsz, self.save_img = \
+            opt.source, opt.weights, opt.view_img, opt.save_txt, opt.img_size, opt.save_img
         save_dir = Path(increment_path(Path(opt.project) / opt.name, exist_ok=opt.exist_ok))  # increment run
         (save_dir / 'labels' if self.save_txt else save_dir).mkdir(parents=True, exist_ok=True)  # make dir
         self.save_dir = save_dir
@@ -46,10 +47,10 @@ class Counter(object):
         device = select_device(opt.device)
         self.half = device.type != 'cpu'  # half precision only supported on CUDA
         self.device = torch.device('cuda' if torch.cuda.is_available else 'cpu')
-        self.tracking_alg = 'iou'
+        self.max_age = 3
+        self.tracking_alg = 'sort'
 
         # Load model
-        print(weights)
         self.model = attempt_load(weights, map_location=device)  # load FP32 model
         self.stride = int(self.model.stride.max())  # model stride
         self.imgsz = check_img_size(self.imgsz, s=self.stride)  # check img_size
@@ -99,34 +100,35 @@ class Counter(object):
                     self.dataset = LoadImages(movie, img_size=self.imgsz, stride=self.stride)
                     self.count(movie)
 
-    def realtime_detection(self,  path_to_movie):
-        basename = os.path.basename(path_to_movie).replace('.mp4', '')
-        movie_id = basename[0:4]
-        save_movie_path = os.path.join(self.save_dir.name, basename+'.mp4')
-        print(save_movie_path)
-        height = self.dataset.height
-        line_down = int(9*(height/10))
-        t1 = threading.Thread(target=self.recall_q2, args=(line_down, height, movie_id, basename))
-        t1.start()
-        time_0 = time.time()
-        for path, img, im0s, vid_cap in self.dataset:
-            self.vid_cap = vid_cap
-
-            img = torch.from_numpy(img).to(self.device)
-            img = img.half() if self.half else img.float()  # uint8 to fp16/32
-            img /= 255.0  # 0 - 255 to 0.0 - 1.0
-            if img.ndimension() == 3:
-                img = img.unsqueeze(0)
-
-            self.images_q.append([img, im0s, path])
-            self.detect(self.images_q.popleft())
-
-        self.flag_of_realtime = False
-        if self.save_txt or self.save_img:
-            s = f"\n{len(list(self.save_dir.glob('labels/*.txt')))} labels saved to {self.save_dir / 'labels'}" if self.save_txt else ''
-            print(f"Results saved to {self.save_dir}{s}")
-
-        print(f'Done. ({time.time() - time_0:.3f}s)')
+#     def realtime_detection(self,  path_to_movie):
+#         basename = os.path.basename(path_to_movie).replace('.mp4', '')
+#         movie_id = basename[0:4]
+#         save_movie_path = os.path.join(self.save_dir.name, basename+'.mp4')
+#         print(save_movie_path)
+#         height = self.dataset.height
+#         line_down = int(9*(height/10))
+#         t1 = threading.Thread(target=self.recall_q2, args=(line_down, height, movie_id, basename))
+#         t1.start()
+#         time_0 = time.time()
+#         for path, img, im0s, vid_cap in self.dataset:
+#             self.vid_cap = vid_cap
+#
+#             img = torch.from_numpy(img).to(self.device)
+#             img = img.half() if self.half else img.float()  # uint8 to fp16/32
+#             img /= 255.0  # 0 - 255 to 0.0 - 1.0
+#             if img.ndimension() == 3:
+#                 img = img.unsqueeze(0)
+#
+#             self.images_q.append([img, im0s, path])
+#             self.detect(self.images_q.popleft())
+#
+#         self.flag_of_realtime = False
+#         if self.save_txt or self.save_img:
+#             s = f"\n{len(list(self.save_dir.glob('labels/*.txt')))} labels saved to {self.save_dir / 'labels'}" if self.save_txt else ''
+#             print(f"Results saved to {self.save_dir}{s}")
+#
+#         print(f'Done. ({time.time() - time_0:.3f}s)')
+#
 
     def count(self,  path_to_movie):
         basename = os.path.basename(path_to_movie).replace('.mp4', '')
@@ -136,12 +138,21 @@ class Counter(object):
         self.image_dir = './'
         height = self.dataset.height
         line_down = int(9*(height/10))
+
         if self.tracking_alg == 'sort':
-            tracker = Sort(3, line_down, movie_id,
-                           './runs', '', basename, min_hits=3)
+            tracker = Sort(max_age=self.max_age,
+                           line_down=line_down,
+                           movie_id=movie_id,
+                           save_image_dir='./runs',
+                           movie_date='',
+                           basename=basename,
+                           min_hits=3)
         else:
-            tracker = Iou_Tracker(
-                line_down, self.image_dir, movie_id, 3, '', basename)
+            tracker = Iou_Tracker(max_age=self.max_age, line_down=line_down,
+                                  save_image_dir=self.image_dir,
+                                  movie_id=movie_id,
+                                  movie_date='',
+                                  base_name=basename)
         for path, img, im0s, vid_cap in self.dataset:
             self.vid_cap = vid_cap
 
@@ -155,6 +166,7 @@ class Counter(object):
 
             self.images_q.append([img, im0s, path])
             result = self.detect(self.images_q.popleft())
+            print(result)
             tracker.update(result, img2)
 
         self.flag_of_realtime = False
@@ -233,7 +245,7 @@ class Counter(object):
                 det = det.cpu().numpy()[0]
                 det = det.astype(np.int64)
                 cord = det[:4]
-                result.append(cord)
+                result.append(np.array(cord))
 
             if self.save_img:
                 if self.dataset.mode == 'image':
@@ -253,4 +265,4 @@ class Counter(object):
                         vid_writer = cv2.VideoWriter(save_path, cv2.VideoWriter_fourcc(*'mp4v'), fps, (w, h))
                     vid_writer.write(im0)
 
-        return result
+        return np.array(result)
