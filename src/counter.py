@@ -48,7 +48,7 @@ class Counter(object):
         self.half = device.type != 'cpu'  # half precision only supported on CUDA
         self.device = torch.device('cuda' if torch.cuda.is_available else 'cpu')
         self.max_age = 3
-        self.tracking_alg = 'sort'
+        self.tracking_alg = 'iou'
 
         # Load model
         self.model = attempt_load(weights, map_location=device)  # load FP32 model
@@ -166,7 +166,7 @@ class Counter(object):
 
             self.images_q.append([img, im0s, path])
             result = self.detect(self.images_q.popleft())
-            print(result)
+            # print(result)
             tracker.update(result, img2)
 
         self.flag_of_realtime = False
@@ -197,8 +197,8 @@ class Counter(object):
                     Ran = random.random()
                     if len(self.recallq) < 10:
                         self.detection_q.append(newFrame)
-
                         continue
+
                     if Ran < Pd:
                         cords = self.detect(newFrame)
                         if cords:
