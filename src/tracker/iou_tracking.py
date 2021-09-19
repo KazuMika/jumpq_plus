@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import numpy as np
 import cv2
-from trash import Trash
+from .trash import Trash
 from fpsrate import FpsWithTick
 from utils.count_utils import convert_to_latlng
 import os
@@ -173,10 +173,10 @@ class Iou_Tracker(object):
                                             prediction2.append(
                                                 (time_stamp, self.cnt_down))
                                         else:
-                                            print('---------------------------------------------------------------------')
-                                            print('save_image_dir', self.save_image_dir)
-                                            print('movie_date,', self.movie_date)
-                                            print('base_name', self.base_name)
+                                            # print('---------------------------------------------------------------------')
+                                            # print('save_image_dir', self.save_image_dir)
+                                            # print('movie_date,', self.movie_date)
+                                            # print('base_name', self.base_name)
                                             cv2.imwrite(os.path.join(self.save_image_dir, self.movie_date + self.base_name +
                                                                      "_{0:04d}_{1:03d}.jpg".format(self.frame_count, self.cnt_down)), frame)
 
