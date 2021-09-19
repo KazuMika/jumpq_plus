@@ -27,7 +27,7 @@
 *.cfg
 !cfg/yolov3*.cfg
 
-/src/yolov5/runs/
+/src/runs/
 /src/yolov5/runs_yolov5m/
 /src/yolov5/weights/
 /src/yolov5/data/
