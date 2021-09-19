@@ -148,11 +148,13 @@ class Counter(object):
                            basename=basename,
                            min_hits=3)
         else:
-            tracker = Iou_Tracker(max_age=self.max_age, line_down=line_down,
+            tracker = Iou_Tracker(max_age=self.max_age,
+                                  line_down=line_down,
                                   save_image_dir=self.image_dir,
                                   movie_id=movie_id,
                                   movie_date='',
                                   base_name=basename)
+
         for path, img, im0s, vid_cap in self.dataset:
             self.vid_cap = vid_cap
 
