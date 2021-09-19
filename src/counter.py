@@ -98,7 +98,7 @@ class Counter(object):
             else:
                 for movie in self.movies:
                     self.dataset = LoadImages(movie, img_size=self.imgsz, stride=self.stride)
-                    self.count(movie)
+                    self.counting(movie)
 
 #
     def get_tracker(self, path_to_movie='./'):
@@ -128,8 +128,11 @@ class Counter(object):
 
         return tracker
 
-    def counting_old(self,  path_to_movie):
+    def counting(self,  path_to_movie):
         tracker = self.get_tracker(path_to_movie)
+        if self.mode != 'dtc_v1':
+            t1 = threading.Thread(target=self.dynamic_algorithm, args=(path_to_movie))
+            t1.start()
 
         for path, img, im0s, vid_cap in self.dataset:
             self.vid_cap = vid_cap
@@ -142,42 +145,13 @@ class Counter(object):
             if img.ndimension() == 3:
                 img = img.unsqueeze(0)
 
-            self.images_q.append([img, im0s, path])
-            result = self.detect(self.images_q.popleft())
-            # print(result)
-            tracker.update(result, img2)
+            if self.mode == 'dtc_v1':
+                result = self.detect([img, im0s, path])
+                tracker.update(result, img2)
+            else:
+                self.images_q.append([img, im0s, path])
 
-        self.flag_of_realtime = False
-        if self.save_txt or self.save_img:
-            s = f"\n{len(list(self.save_dir.glob('labels/*.txt')))} labels saved to {self.save_dir / 'labels'}" if self.save_txt else ''
-            print(f"Results saved to {self.save_dir}{s}")
-
-
-     def jumpQ(self,  path_to_movie):
-         t1 = threading.Thread(target=self.dynamic_algorithm, args=(path_to_movie))
-         t1.start()
-         time_0 = time.time()
-         for path, img, im0s, vid_cap in self.dataset:
-             self.vid_cap = vid_cap
-
-             img = torch.from_numpy(img).to(self.device)
-             img = img.half() if self.half else img.float()  # uint8 to fp16/32
-             img /= 255.0  # 0 - 255 to 0.0 - 1.0
-             if img.ndimension() == 3:
-                 img = img.unsqueeze(0)
-
-             self.images_q.append([img, im0s, path])
-             self.detect(self.images_q.popleft())
-
-         self.flag_of_realtime = False
-         if self.save_txt or self.save_img:
-             s = f"\n{len(list(self.save_dir.glob('labels/*.txt')))} labels saved to {self.save_dir / 'labels'}" if self.save_txt else ''
-             print(f"Results saved to {self.save_dir}{s}")
-
-         print(f'Done. ({time.time() - time_0:.3f}s)')
-
-
-    def dynamic_algorithm(self,path_to_movie):
+    def dynamic_algorithm(self, path_to_movie):
         tracker = self.get_tracker(path_to_movie)
         LC = self.l/self.frame_rate
         Ps = 0.1
