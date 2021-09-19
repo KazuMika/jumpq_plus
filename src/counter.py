@@ -29,8 +29,8 @@ from yolov5.utils.torch_utils import select_device, load_classifier, time_synchr
 
 cudnn.benchmark = True
 
-img_formats = ['bmp', 'jpg', 'jpeg', 'png', 'tif', 'tiff', 'dng', 'webp', 'mpo']  # acceptable image suffixes
-vid_formats = ['mov', 'avi', 'mp4', 'mpg', 'mpeg', 'm4v', 'wmv', 'mkv']  # acceptable video suffixes
+VIDEO_FORMATS = ['mov', 'avi', 'mp4', 'mpg', 'mpeg', 'm4v', 'wmv', 'mkv']  # acceptable video suffixes
+IS_DTC_V1 = 'dtc_v1'
 
 
 class Counter(object):
@@ -42,6 +42,7 @@ class Counter(object):
         (save_dir / 'labels' if self.save_txt else save_dir).mkdir(parents=True, exist_ok=True)  # make dir
         self.save_dir = save_dir
         self.mode = opt.mode
+        self.counting_mode = opt.counting_mode
 
         # Initialize
         set_logging()
@@ -84,7 +85,7 @@ class Counter(object):
         else:
             raise Exception(f'ERROR: {p} does not exist')
 
-        videos = [x for x in files if x.split('.')[-1].lower() in vid_formats]
+        videos = [x for x in files if x.split('.')[-1].lower() in VIDEO_FORMATS]
         return videos
 
     def excute(self):
@@ -130,7 +131,7 @@ class Counter(object):
 
     def counting(self,  path_to_movie):
         tracker = self.get_tracker(path_to_movie)
-        if self.mode != 'dtc_v1':
+        if self.counting_mode == 'dtc_v2':
             t1 = threading.Thread(target=self.dynamic_algorithm, args=(path_to_movie))
             t1.start()
 
@@ -145,7 +146,7 @@ class Counter(object):
             if img.ndimension() == 3:
                 img = img.unsqueeze(0)
 
-            if self.mode == 'dtc_v1':
+            if self.counting_mode == 'dtc_v1':
                 result = self.detect([img, im0s, path])
                 tracker.update(result, img2)
             else:
