@@ -1,9 +1,7 @@
 # -*- coding: utf-8 --
 import time
 import os
-import csv
 import threading
-import datetime
 import random
 from collections import deque
 import cv2
@@ -11,40 +9,35 @@ import numpy as np
 import torch
 import torch.backends.cudnn as cudnn
 import glob
-import yolov5
-from collections import defaultdict
 
 from tracker.sort import Sort
 from tracker.iou_tracking import Iou_Tracker
-from utils.fpsrate import FpsWithTick
 from pathlib import Path
-from utils.count_utils import find_all_files
-import argparse
 
 from yolov5.models.experimental import attempt_load
 from yolov5.utils.datasets import LoadStreams, LoadImages
 from yolov5.utils.general import check_img_size, check_requirements, check_imshow, non_max_suppression, apply_classifier, \
-    scale_coords, xyxy2xywh, strip_optimizer, set_logging, increment_path
-from yolov5.utils.torch_utils import select_device, load_classifier, time_synchronized
+    scale_coords,  set_logging, increment_path
+from yolov5.utils.torch_utils import select_device
 
 cudnn.benchmark = True
 
 VIDEO_FORMATS = ['mov', 'avi', 'mp4', 'mpg', 'mpeg', 'm4v', 'wmv', 'mkv']  # acceptable video suffixes
-IS_DTC_V1 = 'dtc_v1'
 
 
 class Counter(object):
     def __init__(self, opt):
-        self.opt = opt
+        """
+        Initialize
+        """
+        self.opt = opt  # config
         self.source, weights, self.view_img, self.save_txt, self.imgsz, self.save_img = \
             opt.source, opt.weights, opt.view_img, opt.save_txt, opt.img_size, opt.save_img
-        save_dir = Path(increment_path(Path(opt.project) / opt.name, exist_ok=opt.exist_ok))  # increment run
-        (save_dir / 'labels' if self.save_txt else save_dir).mkdir(parents=True, exist_ok=True)  # make dir
-        self.save_dir = save_dir
+        self.save_dir = Path(increment_path(Path(opt.project) / opt.name, exist_ok=opt.exist_ok))  # increment run
+        (self.save_dir / 'labels' if self.save_txt else self.save_dir).mkdir(parents=True, exist_ok=True)  # make dir
         self.mode = opt.mode
         self.counting_mode = opt.counting_mode
 
-        # Initialize
         set_logging()
         self.device = select_device(opt.device)
         self.half = self.device.type != 'cpu'  # half precision only supported on CUDA
@@ -75,6 +68,19 @@ class Counter(object):
             self.webcam = False
 
     def get_movies(self, path):
+        """
+        pathから検出する動画を取得する
+
+        Parameters
+        ----------
+        path : str
+            動画もしくはディレクトリまでの相対パス
+
+        Returns
+        -------
+        videos : list
+            DTCで計数する動画までの絶対パスが入っているlist
+        """
         p = str(Path(path).absolute())  # os-agnostic absolute path
         if '*' in p:
             files = sorted(glob.glob(p, recursive=True))  # glob
@@ -89,24 +95,43 @@ class Counter(object):
         return videos
 
     def excute(self):
+        """
+        実際にcountingを実行する
+        検出をする際はこのメソッドを使用する
+        """
         with torch.no_grad():
             if self.webcam:
                 movie = '0'
                 self.view_img = check_imshow()
                 cudnn.benchmark = True
                 self.dataset = LoadStreams(movie, img_size=self.imgsz, stride=self.stride)
-                self.realtime_detection(movie)
+                self.counting(movie)
             else:
-                for movie in self.movies:
-                    self.dataset = LoadImages(movie, img_size=self.imgsz, stride=self.stride)
-                    self.counting(movie)
+                for movie_path in self.movies:
+                    self.dataset = LoadImages(movie_path, img_size=self.imgsz, stride=self.stride)
+                    self.counting(movie_path)
 
 #
-    def get_tracker(self, path_to_movie='./'):
-        basename = os.path.basename(path_to_movie).replace('.mp4', '')
+    def get_tracker(self, movie_path):
+        """
+        SortかIou_Trackerどちらかを返す
+
+        Parameters
+        ----------
+        movie_path : str
+            動画までの絶対パス
+
+        Returns
+        -------
+        tracker : Sort or Iou_Tracker
+            argparseのself.tracking_algにより
+            SortかIou_Trackerどちらかを返す
+
+        """
+        basename = os.path.basename(movie_path).replace('.mp4', '')
         movie_id = basename[0:4]
-        save_movie_path = os.path.join(self.save_dir.name, basename+'.mp4')
-        print(save_movie_path)
+        # save_movie_path = os.path.join(self.save_dir.name, basename+'.mp4')
+        # print(save_movie_path)
         self.image_dir = './'
         height = self.dataset.height
         line_down = int(9*(height/10))
@@ -129,10 +154,23 @@ class Counter(object):
 
         return tracker
 
-    def counting(self,  path_to_movie):
-        tracker = self.get_tracker(path_to_movie)
+    def counting(self,  movie_path):
+        """
+        SortかIou_Trackerどちらかを返す
+
+        Parameters
+        ----------
+        movie_path : str
+            動画までの絶対パス
+        Returns
+        -------
+        tracker : Sort or Iou_Tracker
+            argparseのself.tracking_algにより
+            SortかIou_Trackerどちらかを返す
+        """
+        tracker = self.get_tracker(movie_path)
         if self.counting_mode == 'dtc_v2':
-            t1 = threading.Thread(target=self.dynamic_algorithm, args=(path_to_movie))
+            t1 = threading.Thread(target=self.jumpQ, args=(movie_path))
             t1.start()
 
         for path, img, im0s, vid_cap in self.dataset:
@@ -146,22 +184,29 @@ class Counter(object):
             if img.ndimension() == 3:
                 img = img.unsqueeze(0)
 
-            if self.counting_mode == 'dtc_v1':
+            if self.counting_mode == 'dtc_v2':
+                self.images_q.append([img, im0s, path])
+            else:
                 result = self.detect([img, im0s, path])
                 tracker.update(result, img2)
-            else:
-                self.images_q.append([img, im0s, path])
 
-    def dynamic_algorithm(self, path_to_movie):
-        tracker = self.get_tracker(path_to_movie)
+    def jumpQ(self, movie_path):
+        """
+        countingのなかでthreading化され
+        動的に検出する
+
+        Parameters
+        ----------
+        movie_path : str
+            動画までの絶対パス
+        """
+        tracker = self.get_tracker(movie_path)
         LC = self.l/self.frame_rate
         Ps = 0.1
         Pd = 1
         Tw = 10
-        # self.tracking_alg = 'iou'
 
         i = 0
-        ########################
         while self.flag_of_realtime or self.q:
             if self.q:
                 i += 1
@@ -198,6 +243,20 @@ class Counter(object):
         print('end_time:{}'.format(self.time))
 
     def detect(self, images):
+        """
+        yolov5で検出する
+
+        Parameters
+        ----------
+        images : list
+            動画1フレーム
+
+        Returns
+        -------
+        result : ndarray
+            yolov5で検出された物体それぞれのcordと
+            confidece,classの情報が入っているndarray
+        """
         img, im0s, path = images
         pred = self.model(img, augment=self.opt.augment)[0]
 
