@@ -7,7 +7,7 @@ from scipy.optimize import linear_sum_assignment as linear_assignment
 import time
 from filterpy.kalman import KalmanFilter
 import cv2
-from fpsrate import FpsWithTick
+from utils.fpsrate import FpsWithTick
 from utils.count_utils import convert_to_latlng
 import os
 import warnings
