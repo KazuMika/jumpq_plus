@@ -12,6 +12,7 @@ import torch
 import torch.backends.cudnn as cudnn
 import glob
 import yolov5
+from collections import defaultdict
 
 from tracker.sort import Sort
 from tracker.iou_tracking import Iou_Tracker
@@ -44,14 +45,13 @@ class Counter(object):
 
         # Initialize
         set_logging()
-        device = select_device(opt.device)
-        self.half = device.type != 'cpu'  # half precision only supported on CUDA
-        self.device = torch.device('cuda' if torch.cuda.is_available else 'cpu')
+        self.device = select_device(opt.device)
+        self.half = self.device.type != 'cpu'  # half precision only supported on CUDA
         self.max_age = 3
-        self.tracking_alg = 'iou'
+        self.tracking_alg = opt.tracking_alg
 
         # Load model
-        self.model = attempt_load(weights, map_location=device)  # load FP32 model
+        self.model = attempt_load(weights, map_location=self.device)  # load FP32 model
         self.stride = int(self.model.stride.max())  # model stride
         self.imgsz = check_img_size(self.imgsz, s=self.stride)  # check img_size
         self.names = self.model.module.names if hasattr(self.model, 'module') else self.model.names
@@ -64,8 +64,8 @@ class Counter(object):
         if self.half:
             self.model.half()  # to FP16
 
-        if device.type != 'cpu':
-            self.model(torch.zeros(1, 3, self.imgsz, self.imgsz).to(device).type_as(next(self.model.parameters())))  # run once
+        if self.device.type != 'cpu':
+            self.model(torch.zeros(1, 3, self.imgsz, self.imgsz).to(self.device).type_as(next(self.model.parameters())))  # run once
         if self.mode == 'webcam':
             self.movies = []
             self.webcam = True
@@ -100,37 +100,8 @@ class Counter(object):
                     self.dataset = LoadImages(movie, img_size=self.imgsz, stride=self.stride)
                     self.count(movie)
 
-#     def realtime_detection(self,  path_to_movie):
-#         basename = os.path.basename(path_to_movie).replace('.mp4', '')
-#         movie_id = basename[0:4]
-#         save_movie_path = os.path.join(self.save_dir.name, basename+'.mp4')
-#         print(save_movie_path)
-#         height = self.dataset.height
-#         line_down = int(9*(height/10))
-#         t1 = threading.Thread(target=self.recall_q2, args=(line_down, height, movie_id, basename))
-#         t1.start()
-#         time_0 = time.time()
-#         for path, img, im0s, vid_cap in self.dataset:
-#             self.vid_cap = vid_cap
 #
-#             img = torch.from_numpy(img).to(self.device)
-#             img = img.half() if self.half else img.float()  # uint8 to fp16/32
-#             img /= 255.0  # 0 - 255 to 0.0 - 1.0
-#             if img.ndimension() == 3:
-#                 img = img.unsqueeze(0)
-#
-#             self.images_q.append([img, im0s, path])
-#             self.detect(self.images_q.popleft())
-#
-#         self.flag_of_realtime = False
-#         if self.save_txt or self.save_img:
-#             s = f"\n{len(list(self.save_dir.glob('labels/*.txt')))} labels saved to {self.save_dir / 'labels'}" if self.save_txt else ''
-#             print(f"Results saved to {self.save_dir}{s}")
-#
-#         print(f'Done. ({time.time() - time_0:.3f}s)')
-#
-
-    def count(self,  path_to_movie):
+    def get_tracker(self, path_to_movie='./'):
         basename = os.path.basename(path_to_movie).replace('.mp4', '')
         movie_id = basename[0:4]
         save_movie_path = os.path.join(self.save_dir.name, basename+'.mp4')
@@ -138,7 +109,7 @@ class Counter(object):
         self.image_dir = './'
         height = self.dataset.height
         line_down = int(9*(height/10))
-
+        tracker = None
         if self.tracking_alg == 'sort':
             tracker = Sort(max_age=self.max_age,
                            line_down=line_down,
@@ -154,6 +125,11 @@ class Counter(object):
                                   movie_id=movie_id,
                                   movie_date='',
                                   base_name=basename)
+
+        return tracker
+
+    def counting_old(self,  path_to_movie):
+        tracker = self.get_tracker(path_to_movie)
 
         for path, img, im0s, vid_cap in self.dataset:
             self.vid_cap = vid_cap
@@ -176,18 +152,38 @@ class Counter(object):
             s = f"\n{len(list(self.save_dir.glob('labels/*.txt')))} labels saved to {self.save_dir / 'labels'}" if self.save_txt else ''
             print(f"Results saved to {self.save_dir}{s}")
 
-    def recall_q2(self, line_down, height, movie_id, basename):
+
+     def jumpQ(self,  path_to_movie):
+         t1 = threading.Thread(target=self.dynamic_algorithm, args=(path_to_movie))
+         t1.start()
+         time_0 = time.time()
+         for path, img, im0s, vid_cap in self.dataset:
+             self.vid_cap = vid_cap
+
+             img = torch.from_numpy(img).to(self.device)
+             img = img.half() if self.half else img.float()  # uint8 to fp16/32
+             img /= 255.0  # 0 - 255 to 0.0 - 1.0
+             if img.ndimension() == 3:
+                 img = img.unsqueeze(0)
+
+             self.images_q.append([img, im0s, path])
+             self.detect(self.images_q.popleft())
+
+         self.flag_of_realtime = False
+         if self.save_txt or self.save_img:
+             s = f"\n{len(list(self.save_dir.glob('labels/*.txt')))} labels saved to {self.save_dir / 'labels'}" if self.save_txt else ''
+             print(f"Results saved to {self.save_dir}{s}")
+
+         print(f'Done. ({time.time() - time_0:.3f}s)')
+
+
+    def dynamic_algorithm(self,path_to_movie):
+        tracker = self.get_tracker(path_to_movie)
         LC = self.l/self.frame_rate
         Ps = 0.1
         Pd = 1
         Tw = 10
         # self.tracking_alg = 'iou'
-        if self.tracking_alg == 'sort':
-            tracker = Sort(self.max_age, line_down, movie_id,
-                           self.image_dir, '', basename, min_hits=3)
-        else:
-            tracker = Iou_Tracker(
-                line_down, self.image_dir, movie_id, self.max_age, '', basename)
 
         i = 0
         ########################

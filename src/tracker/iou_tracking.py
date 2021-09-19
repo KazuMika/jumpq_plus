@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import numpy as np
 import cv2
-from trash import Trash
+from .trash import Trash
 from fpsrate import FpsWithTick
 from utils.count_utils import convert_to_latlng
 import os
