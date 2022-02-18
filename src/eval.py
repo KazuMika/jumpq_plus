@@ -34,23 +34,10 @@ def main():
     parser.add_argument('--test',
                         action='store_true',
                         help='only testgom.mp4')
-    parser.add_argument('--cfg',
-                        type=str,
-                        default='cfg/yolov3-tiny.cfg',
-                        help='cfg file path if yolo')
     parser.add_argument('--save_dir_path',
                         type=str,
                         default='/home/quantan/DTCEvaluation/yolov3_dtceval/results/',
                         help='cfg file path if yolo')
-    parser.add_argument('--weights',
-                        '-w',
-                        type=str,
-                        default='./weightscomplete/yolov3-tiny_best_288.pt',
-                        help='path to weights file')
-    parser.add_argument('--conf-thres',
-                        type=float,
-                        default=0.40,
-                        help='object confidence threshold')
     parser.add_argument('--nms-thres',
                         type=float,
                         default=0.45,
@@ -66,10 +53,6 @@ def main():
                         type=str,
                         default='iou',
                         help="iou or sort")
-    parser.add_argument('--img-size',
-                        type=int,
-                        default=32 * 9,
-                        help='size of image dimension')
     parser.add_argument('--model',
                         '-m',
                         type=str,
@@ -79,7 +62,7 @@ def main():
                         action='store_true')
     parser.add_argument('--fps_eval', '-f',
                         action='store_true')
-    parser.add_argument('--weights', nargs='+', type=str, default='yolov5s.pt', help='model.pt path(s)')
+    parser.add_argument('--weights', nargs='+', type=str, default='.weights/best.pt', help='model.pt path(s)')
     parser.add_argument('--source', type=str, default='data/images', help='source')  # file/folder, 0 for webcam
     parser.add_argument('--img-size', type=int, default=640, help='inference size (pixels)')
     parser.add_argument('--conf-thres', type=float, default=0.25, help='object confidence threshold')
