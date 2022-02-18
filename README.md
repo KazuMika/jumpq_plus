@@ -1,5 +1,12 @@
 # DeepCounter v2
 
+## Python % 
+
+- 3.8.6  
+
+```sh
+pip install -r requirements.txt
+```
 ## ディレクトリ構成(主なファイルのみ)
 
 src  
