@@ -2,17 +2,49 @@
 from __future__ import print_function
 from numba import jit
 import numpy as np
-from scipy.optimize import linear_sum_assignment as linear_assignment
-# from scipy.optimize import linear_sum_assignment as linear_assignment
 import time
 from filterpy.kalman import KalmanFilter
 import cv2
-from utils.fpsrate import FpsWithTick
-from utils.count_utils import convert_to_latlng
+import sys
+
+from .fpsrate import FpsWithTick
 import os
 import warnings
+if True:
+    sys.path.append('../')
+    from utils.count_utils import convert_to_latlng
 
 warnings.simplefilter('ignore')
+
+
+def linear_assignment(cost_matrix):
+    try:
+        import lap
+        _, x, y = lap.lapjv(cost_matrix, extend_cost=True)
+        return np.array([[y[i], i] for i in x if i >= 0])
+    except ImportError:
+        from scipy.optimize import linear_sum_assignment
+        x, y = linear_sum_assignment(cost_matrix)
+        return np.array(list(zip(x, y)))
+
+
+def iou_batch(bb_test, bb_gt):
+    """
+    From SORT: Computes IOU between two bboxes in the form [x1,y1,x2,y2]
+    """
+    bb_gt = np.expand_dims(bb_gt, 0)
+    bb_test = np.expand_dims(bb_test, 1)
+
+    xx1 = np.maximum(bb_test[..., 0], bb_gt[..., 0])
+    yy1 = np.maximum(bb_test[..., 1], bb_gt[..., 1])
+    xx2 = np.minimum(bb_test[..., 2], bb_gt[..., 2])
+    yy2 = np.minimum(bb_test[..., 3], bb_gt[..., 3])
+    w = np.maximum(0., xx2 - xx1)
+    h = np.maximum(0., yy2 - yy1)
+    wh = w * h
+    o = wh / ((bb_test[..., 2] - bb_test[..., 0]) * (bb_test[..., 3] - bb_test[..., 1])
+              + (bb_gt[..., 2] - bb_gt[..., 0]) * (bb_gt[..., 3] - bb_gt[..., 1]) - wh)
+    return(o)
 
 
 class KalmanBoxTracker(object):
@@ -121,8 +153,6 @@ class Sort(object):
             if fps_eval:
                 return True
 
-            print('test')
-
             cv2.imwrite(os.path.join(self.save_image_dir, self.basename+self.movie_date +
                                      "_{0:04d}_{1:03d}.jpg".format(self.frame_count, self.cnt_down)), frame)
             print('count:{}'.format(self.cnt_down))
@@ -156,7 +186,6 @@ class Sort(object):
                         "_{0:04d}".format(self.cnt_down)
                 except:
                     lat, lng = 0, 0
-                    print('gregaergargag')
                     date_gps = self.movie_date + \
                         "_{0:04d}".format(self.cnt_down)
                 gps_list.append([lat, lng, date_gps])
@@ -165,7 +194,7 @@ class Sort(object):
             return False
 
     def update(self,
-               dets,
+               dets=np.empty((0, 5)),
                frame=None,
                gpss=None,
                gps_count=None,
@@ -177,6 +206,8 @@ class Sort(object):
                fps_eval=False):
 
         # get predicted locations from existing trackers.
+        if len(dets) == 0:
+            dets = np.empty((0, 5))
         trks = np.zeros((len(self.trackers), 5))
         to_del = []
         for t, trk in enumerate(trks):
@@ -300,22 +331,24 @@ def convert_x_to_bbox(x, score=None):
         return np.array([x[0]-w/2., x[1]-h/2., x[0]+w/2., x[1]+h/2., score]).reshape((1, 5))
 
 
-def associate_detections_to_trackers(detections, trackers, iou_threshold=0):
+def associate_detections_to_trackers(detections, trackers, iou_threshold=0.3):
     """
     Assigns detections to tracked object (both represented as bounding boxes)
-
     Returns 3 lists of matches, unmatched_detections and unmatched_trackers
     """
     if(len(trackers) == 0):
         return np.empty((0, 2), dtype=int), np.arange(len(detections)), np.empty((0, 5), dtype=int)
-    iou_matrix = np.zeros((len(detections), len(trackers)), dtype=np.float32)
 
-    for d, det in enumerate(detections):
-        for t, trk in enumerate(trackers):
-            iou_matrix[d, t] = iou(det, trk)
-    matched_indices = linear_assignment(-iou_matrix)
-    # print('iou_matrix', iou_matrix.shape, iou_matrix)
-    # print('matched_indices', matched_indices.shape, matched_indices)
+    iou_matrix = iou_batch(detections, trackers)
+
+    if min(iou_matrix.shape) > 0:
+        a = (iou_matrix > iou_threshold).astype(np.int32)
+        if a.sum(1).max() == 1 and a.sum(0).max() == 1:
+            matched_indices = np.stack(np.where(a), axis=1)
+        else:
+            matched_indices = linear_assignment(-iou_matrix)
+    else:
+        matched_indices = np.empty(shape=(0, 2))
 
     unmatched_detections = []
     for d, det in enumerate(detections):
@@ -323,14 +356,13 @@ def associate_detections_to_trackers(detections, trackers, iou_threshold=0):
             unmatched_detections.append(d)
     unmatched_trackers = []
     for t, trk in enumerate(trackers):
-        print('marhes_indices:', matched_indices)
         if(t not in matched_indices[:, 1]):
             unmatched_trackers.append(t)
 
     # filter out matched with low IOU
     matches = []
     for m in matched_indices:
-        if(iou_matrix[m[0], m[1]] <= iou_threshold):
+        if(iou_matrix[m[0], m[1]] < iou_threshold):
             unmatched_detections.append(m[0])
             unmatched_trackers.append(m[1])
         else:

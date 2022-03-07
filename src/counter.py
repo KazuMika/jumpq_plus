@@ -30,6 +30,8 @@ class Counter(object):
         """
         Initialize
         """
+        self.q = deque()
+
         self.opt = opt  # config
         self.source, weights, self.view_img, self.save_txt, self.imgsz, self.save_img = \
             opt.source, opt.weights, opt.view_img, opt.save_txt, opt.img_size, opt.save_img
@@ -41,7 +43,7 @@ class Counter(object):
         set_logging()
         self.device = select_device(opt.device)
         self.half = self.device.type != 'cpu'  # half precision only supported on CUDA
-        self.max_age = 3
+        self.max_age = 1 if self.opt.tracking_alg == 'sort' else '3'
         self.tracking_alg = opt.tracking_alg
 
         # Load model
@@ -109,7 +111,7 @@ class Counter(object):
             else:
                 for movie_path in self.movies:
                     self.dataset = LoadImages(movie_path, img_size=self.imgsz, stride=self.stride)
-                    self._counting(movie_path)
+                    self.counting(movie_path)
 
 #
     def get_tracker(self, movie_path):
@@ -154,38 +156,14 @@ class Counter(object):
 
         return tracker
 
-    def _counting(self,  movie_path):
-        """
-        thredingなし
-
-        """
-        tracker = self.get_tracker(movie_path)
-
-        for path, img, im0s, vid_cap in self.dataset:
-            self.vid_cap = vid_cap
-
-            img2 = img.copy()
-
-            img = torch.from_numpy(img).to(self.device)
-            img = img.half() if self.half else img.float()  # uint8 to fp16/32
-            img /= 255.0  # 0 - 255 to 0.0 - 1.0
-            if img.ndimension() == 3:
-                img = img.unsqueeze(0)
-
-            if self.counting_mode == 'dtc_v2':
-                self.images_q.append([img, im0s, path])
-            else:
-                result = self.detect([img, im0s, path])
-                tracker.update(result, img2)
-
     def counting(self,  movie_path):
         """
 
         """
         tracker = self.get_tracker(movie_path)
-        if self.counting_mode == 'dtc_v2':
-            print(movie_path)
-            t1 = threading.Thread(target=self.jumpQ, args=(movie_path))
+        if self.counting_mode == 'v2':
+            print(len(movie_path))
+            t1 = threading.Thread(target=self.jumpQ, args=(movie_path,))
             t1.start()
 
         for path, img, im0s, vid_cap in self.dataset:
@@ -199,11 +177,11 @@ class Counter(object):
             if img.ndimension() == 3:
                 img = img.unsqueeze(0)
 
-            if self.counting_mode == 'dtc_v2':
-                self.images_q.append([img, im0s, path])
-            else:
+            if self.counting_mode == 'v1':
                 result = self.detect([img, im0s, path])
                 tracker.update(result, img2)
+            elif self.counting_mode == 'v2':
+                self.q.append([img, im0s, path])
 
     def jumpQ(self, movie_path):
         """
@@ -216,13 +194,14 @@ class Counter(object):
             動画までの絶対パス
         """
         tracker = self.get_tracker(movie_path)
-        LC = self.l/self.frame_rate
+        # LC = self.l/self.frame_rate
+        LC = 10.0 / 20.0
         Ps = 0.1
         Pd = 1
         Tw = 10
-
         i = 0
         while self.flag_of_realtime or self.q:
+            print('test')
             if self.q:
                 i += 1
                 newFrame = self.images_q.popleft()
