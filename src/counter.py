@@ -109,7 +109,7 @@ class Counter(object):
             else:
                 for movie_path in self.movies:
                     self.dataset = LoadImages(movie_path, img_size=self.imgsz, stride=self.stride)
-                    self.counting(movie_path)
+                    self._counting(movie_path)
 
 #
     def get_tracker(self, movie_path):
@@ -154,22 +154,37 @@ class Counter(object):
 
         return tracker
 
+    def _counting(self,  movie_path):
+        """
+        thredingなし
+
+        """
+        tracker = self.get_tracker(movie_path)
+
+        for path, img, im0s, vid_cap in self.dataset:
+            self.vid_cap = vid_cap
+
+            img2 = img.copy()
+
+            img = torch.from_numpy(img).to(self.device)
+            img = img.half() if self.half else img.float()  # uint8 to fp16/32
+            img /= 255.0  # 0 - 255 to 0.0 - 1.0
+            if img.ndimension() == 3:
+                img = img.unsqueeze(0)
+
+            if self.counting_mode == 'dtc_v2':
+                self.images_q.append([img, im0s, path])
+            else:
+                result = self.detect([img, im0s, path])
+                tracker.update(result, img2)
+
     def counting(self,  movie_path):
         """
-        SortかIou_Trackerどちらかを返す
 
-        Parameters
-        ----------
-        movie_path : str
-            動画までの絶対パス
-        Returns
-        -------
-        tracker : Sort or Iou_Tracker
-            argparseのself.tracking_algにより
-            SortかIou_Trackerどちらかを返す
         """
         tracker = self.get_tracker(movie_path)
         if self.counting_mode == 'dtc_v2':
+            print(movie_path)
             t1 = threading.Thread(target=self.jumpQ, args=(movie_path))
             t1.start()
 
