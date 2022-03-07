@@ -31,7 +31,7 @@ def main():
 
     parser.add_argument("--mode", default='video', help='webcam or video')
     parser.add_argument("--counting_mode", default='v1', help='v1 or v2')
-    parser.add_argument("--save_img", action='store_true', help='save image optim default is False')
+    parser.add_argument("--save_movie", action='store_true', default=True, help='save image optim default is False')
     opt = parser.parse_args()
     print(opt)
     counter = Counter(opt)
