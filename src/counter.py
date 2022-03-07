@@ -30,6 +30,8 @@ class Counter(object):
         """
         Initialize
         """
+        self.q = deque()
+
         self.opt = opt  # config
         self.source, weights, self.view_img, self.save_txt, self.imgsz, self.save_img = \
             opt.source, opt.weights, opt.view_img, opt.save_txt, opt.img_size, opt.save_img
@@ -41,7 +43,7 @@ class Counter(object):
         set_logging()
         self.device = select_device(opt.device)
         self.half = self.device.type != 'cpu'  # half precision only supported on CUDA
-        self.max_age = 3
+        self.max_age = 1 if self.opt.tracking_alg == 'sort' else '3'
         self.tracking_alg = opt.tracking_alg
 
         # Load model
@@ -160,8 +162,8 @@ class Counter(object):
         """
         tracker = self.get_tracker(movie_path)
         if self.counting_mode == 'v2':
-            print(movie_path)
-            t1 = threading.Thread(target=self.jumpQ, args=(movie_path))
+            print(len(movie_path))
+            t1 = threading.Thread(target=self.jumpQ, args=(movie_path,))
             t1.start()
 
         for path, img, im0s, vid_cap in self.dataset:
@@ -179,7 +181,7 @@ class Counter(object):
                 result = self.detect([img, im0s, path])
                 tracker.update(result, img2)
             elif self.counting_mode == 'v2':
-                self.images_q.append([img, im0s, path])
+                self.q.append([img, im0s, path])
 
     def jumpQ(self, movie_path):
         """
@@ -192,13 +194,14 @@ class Counter(object):
             動画までの絶対パス
         """
         tracker = self.get_tracker(movie_path)
-        LC = self.l/self.frame_rate
+        # LC = self.l/self.frame_rate
+        LC = 10.0 / 20.0
         Ps = 0.1
         Pd = 1
         Tw = 10
-
         i = 0
         while self.flag_of_realtime or self.q:
+            print('test')
             if self.q:
                 i += 1
                 newFrame = self.images_q.popleft()
