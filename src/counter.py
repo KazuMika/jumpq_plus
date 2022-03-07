@@ -16,7 +16,7 @@ from pathlib import Path
 
 from yolov5.models.experimental import attempt_load
 from yolov5.utils.datasets import LoadStreams, LoadImages
-from yolov5.utils.general import check_img_size, check_requirements, check_imshow, non_max_suppression, apply_classifier, \
+from yolov5.utils.general import check_img_size, check_imshow, non_max_suppression, \
     scale_coords,  set_logging, increment_path
 from yolov5.utils.torch_utils import select_device
 
@@ -30,7 +30,6 @@ class Counter(object):
         """
         Initialize
         """
-        self.q = deque()
 
         self.opt = opt  # config
         self.source, weights, self.view_img, self.save_txt, self.imgsz, self.save_img = \
@@ -39,6 +38,10 @@ class Counter(object):
         (self.save_dir / 'labels' if self.save_txt else self.save_dir).mkdir(parents=True, exist_ok=True)  # make dir
         self.mode = opt.mode
         self.counting_mode = opt.counting_mode
+
+        # for jumpQ
+        self.is_movie_opened = True
+        self.queue_images = deque()
 
         set_logging()
         self.device = select_device(opt.device)
@@ -54,8 +57,6 @@ class Counter(object):
         self.colors = [[random.randint(0, 255) for _ in range(3)] for _ in self.names]
         self.vid_path, self.vid_writer = None, None
         self.dataset = None
-        self.images_q = deque()
-        self.detection_q = deque()
 
         if self.half:
             self.model.half()  # to FP16
@@ -113,7 +114,6 @@ class Counter(object):
                     self.dataset = LoadImages(movie_path, img_size=self.imgsz, stride=self.stride)
                     self.counting(movie_path)
 
-#
     def get_tracker(self, movie_path):
         """
         SortかIou_Trackerどちらかを返す
@@ -160,8 +160,10 @@ class Counter(object):
         """
 
         """
-        tracker = self.get_tracker(movie_path)
-        if self.counting_mode == 'v2':
+
+        if self.counting_mode == 'v1':
+            tracker = self.get_tracker(movie_path)
+        elif self.counting_mode == 'v2':
             print(len(movie_path))
             t1 = threading.Thread(target=self.jumpQ, args=(movie_path,))
             t1.start()
@@ -181,7 +183,9 @@ class Counter(object):
                 result = self.detect([img, im0s, path])
                 tracker.update(result, img2)
             elif self.counting_mode == 'v2':
-                self.q.append([img, im0s, path])
+                self.queue_images.append([img, im0s, path, img2])
+
+        self.is_movie_opened = False
 
     def jumpQ(self, movie_path):
         """
@@ -200,41 +204,41 @@ class Counter(object):
         Pd = 1
         Tw = 10
         i = 0
-        while self.flag_of_realtime or self.q:
-            print('test')
-            if self.q:
+        w = 0
+        stack_images = deque()
+        while self.is_movie_opened or self.queue_images:
+            if self.queue_images:
                 i += 1
-                newFrame = self.images_q.popleft()
-                if newFrame is not None:
+                img = self.queue_images.popleft()
+
+                if img is not None:
                     Ran = random.random()
-                    if len(self.recallq) < 10:
-                        self.detection_q.append(newFrame)
+                    if len(stack_images) < 10:
+                        stack_images.append(img)
                         continue
 
                     if Ran < Pd:
-                        cords = self.detect(newFrame)
-                        if cords:
+                        cords = self.detect(img[:3])
+                        if len(cords) >= 1:
                             Pd = 1
-                            self.w = 0
-                            while self.recallq:
-                                img = self.recallq.popleft()
-                                detectQ = self.detect_image(img)
-                                tracker.update(detectQ, img)
+                            w = 0
+                            while stack_images:
+                                img = stack_images.popleft()
+                                result = self.detect(img[:3])
+                                tracker.update(result, img[3])
 
                         else:
-                            self.w += 1
-                            if self.w >= Tw:
+                            w += 1
+                            if w >= Tw:
                                 Pd = max(Pd - Ps, LC)
                     else:
-                        if Tw > len(self.recallq):
-                            self.recallq.append(newFrame)
+                        if Tw > len(self.queue_images):
+                            self.queue_images.append(img)
                         else:
-                            self.recallq.append(newFrame)
-                            self.recallq.popleft()
+                            self.queue_images.append(img)
+                            self.queue_images.popleft()
                 else:
                     continue
-        self.time = time.time()-self.time
-        print('end_time:{}'.format(self.time))
 
     def detect(self, images):
         """
