@@ -13,8 +13,8 @@
 # v2 & jetson nano
 #python main.py --counting_mode v2 --mode webcam
 
-# v1 & vide & sort
-python main.py --tracking_alg sort --counting_mode v1 --mode video
+# v2 & video & sort
+python main.py --tracking_alg iou --counting_mode v1 --mode video
 
 # v1 & jetson nano & sort
 #python main.py --counting_mode v2 --mode video --tracking_alg sort 

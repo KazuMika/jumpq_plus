@@ -3,8 +3,11 @@ import numpy as np
 import cv2
 from .trash import Trash
 from .fpsrate import FpsWithTick
-from utils.count_utils import convert_to_latlng
 import os
+import sys
+if True:
+    sys.path.append('../')
+    from utils.count_utils import convert_to_latlng
 
 
 class Iou_Tracker(object):
@@ -16,7 +19,7 @@ class Iou_Tracker(object):
         self.cnt_down = 0
         self.frame_count = 0
         self.trashs = []
-        self.max_age = max_age
+        self.max_age = int(max_age)
         self.t_id = 0
         self.font = cv2.FONT_HERSHEY_DUPLEX
         self.frame_count = 0
@@ -91,169 +94,42 @@ class Iou_Tracker(object):
 
         return sets
 
-    def update(self, cords2, frame, gpss=None, gps_count=0, visualize=False, movie_date='', gps_list=None, prediction2=None, time_stamp=None, demo=False, fps_eval=False):
+    def update(self,  cords2,  frame):
         sets = self.match_trash(cords2)
 
         if sets is not None:
-            if fps_eval:
-                for cord_id, trash_id in sets:
-                    cord = cords2[cord_id]
-                    cord = cord.astype("int64")
-                    x, y, w, h = cord[0], cord[1], cord[2] - \
-                        cord[0], cord[3]-cord[1]
-                    _center = np.array([int(x + (w/2)), int(y + (h*7/8))])
+            for cord_id, trash_id in sets:
+                cord = cords2[cord_id]
+                cord = cord.astype("int64")
+                x, y, w, h = cord[0], cord[1], cord[2] - \
+                    cord[0], cord[3]-cord[1]
+                _center = np.array([int(x + (w/2)), int(y + (h*7/8))])
 
-                    if trash_id != 0:
-                        for i in self.trashs:
-                            if i.id == trash_id:
-                                i.updateCoords(cord, _center)
-                                if i.going_DOWN(self.line_down):
-                                    if i.state:
-                                        self.cnt_down += 1
-                                        i.state = False
-                                        i.done = True
+                if trash_id != 0:
+                    for i in self.trashs:
+                        if i.id == trash_id:
+                            i.updateCoords(cord, _center)
+                            if i.going_DOWN(self.line_down):
+                                if i.state:
+                                    self.cnt_down += 1
+                                    i.state = False
+                                    i.done = True
+                                    print("ID:", i.id, 'crossed', self.cnt_down)
 
-                    elif trash_id == 0 and _center[1] < self.line_down:
-                        t = Trash(self.t_id, cord, _center, self.max_age)
-                        self.trashs.append(t)
-                        self.t_id += 1
-                    else:
-                        pass
+                elif trash_id == 0 and _center[1] < self.line_down:
+                    t = Trash(self.t_id, cord, _center, self.max_age)
+                    self.trashs.append(t)
+                    self.t_id += 1
 
-            else:
-                for cord_id, trash_id in sets:
-                    cord = cords2[cord_id]
-                    cord = cord.astype("int64")
-                    x, y, w, h = cord[0], cord[1], cord[2] - \
-                        cord[0], cord[3]-cord[1]
-                    _center = np.array([int(x + (w/2)), int(y + (h*7/8))])
+        for i in self.trashs:
+            i.age += 1
+            if i.age > self.max_age:
+                i.done = True
 
-                    if trash_id != 0:
-                        for i in self.trashs:
-                            if i.id == trash_id:
-                                i.updateCoords(cord, _center)
-                                if i.going_DOWN(self.line_down):
-                                    if i.state:
-                                        self.cnt_down += 1
-                                        i.state = False
-                                        i.done = True
-                                        cv2.circle(
-                                            frame, (i.center[0], i.center[1]), 3, (0, 0, 126), -1)
-                                        cv2.rectangle(
-                                            frame, (i.cords[0], i.cords[1]), (i.cords[2], i.cords[3]), (0, 252, 124), 2)
-                                        cv2.rectangle(frame, (i.cords[0], i.cords[1] - 20),
-                                                      (i.cords[0] + 170, i.cords[1]), (0, 252, 124), thickness=2)
-                                        cv2.rectangle(frame, (i.cords[0], i.cords[1] - 20),
-                                                      (i.cords[0] + 170, i.cords[1]), (0, 252, 124), -1)
-                                        str_down = 'COUNT:' + str(self.cnt_down)
-                                        cv2.putText(frame, str(
-                                            i.id) + " " + str(i.age), (i.cords[0], i.cords[1] - 5), self.font, 0.6, (0, 0, 0), 1, cv2.LINE_AA)
-                                        cv2.line(frame, (0, self.line_down), (int(
+            if i.center[1] > self.line_down:
+                i.done = True
+            if i.done:
+                index = self.trashs.index(i)
+                self.trashs.pop(index)
 
-                                            frame.shape[1]), self.line_down), (255, 0, 0), 2)
-                                        cv2.putText(
-                                            frame, str_down, (10, 70), self.font, 2.5, (0, 0, 0), 10, cv2.LINE_AA)
-                                        cv2.putText(
-                                            frame, str_down, (10, 70), self.font, 2.5, (255, 255, 255), 8, cv2.LINE_AA)
-                                        print("ID:", i.id, 'crossed', self.cnt_down)
-                                        if demo:
-                                            img_name = time_stamp + \
-                                                '_{0:04d}.jpg'.format(
-                                                    self.cnt_down)
-                                            cv2.putText(frame, str_down, (10, 70), self.font,
-                                                        2.0, (0, 0, 0), 10, cv2.LINE_AA)
-                                            cv2.putText(frame, str_down, (10, 70), self.font,
-                                                        2.0, (255, 255, 255), 8, cv2.LINE_AA)
-                                            cv2.putText(frame, time_stamp, (900, 40), self.font,
-                                                        1.0, (0, 0, 0), 5, cv2.LINE_AA)
-                                            cv2.putText(frame, time_stamp, (900, 40), self.font,
-                                                        1.0, (255, 255, 255), 4, cv2.LINE_AA)
-                                            cv2.imwrite(
-                                                self.save_image_dir+img_name, frame)
-                                            prediction2.append(
-                                                (time_stamp, self.cnt_down))
-                                        else:
-                                            # print('---------------------------------------------------------------------')
-                                            # print('save_image_dir', self.save_image_dir)
-                                            # print('movie_date,', self.movie_date)
-                                            # print('base_name', self.base_name)
-                                            cv2.imwrite(os.path.join(self.save_image_dir, self.movie_date + self.base_name +
-                                                                     "_{0:04d}_{1:03d}.jpg".format(self.frame_count, self.cnt_down)), frame)
-
-                                        if visualize:
-                                            try:
-                                                lat = gpss[gps_count].split(',')[
-                                                    0][1:]
-                                                lng = gpss[gps_count].split(',')[1]
-                                                lat, lng = convert_to_latlng(
-                                                    lat, lng)
-                                                print(lat, lng)
-                                                date_gps = movie_date + \
-                                                    "_{0:04d}".format(
-                                                        self.cnt_down)
-                                            except:
-                                                lat, lng = 0, 0
-                                                print('gregaergargag')
-                                                date_gps = movie_date + \
-                                                    "_{0:04d}".format(
-                                                        self.cnt_down)
-                                            gps_list.append(
-                                                [lat, lng, date_gps])
-                                        else:
-                                            pass
-
-                    elif trash_id == 0 and _center[1] < self.line_down:
-                        t = Trash(self.t_id, cord, _center, self.max_age)
-                        self.trashs.append(t)
-                        self.t_id += 1
-                    else:
-                        pass
-
-        if fps_eval:
-            for i in self.trashs:
-                i.age += 1
-                if i.age > self.max_age:
-                    i.done = True
-                if i.center[1] > self.line_down:
-                    i.done = True
-                if i.done:
-                    index = self.trashs.index(i)
-                    self.trashs.pop(index)
-
-            fps1 = self.fpsWithTick.get()
-            self.fps_count += fps1
-            self.frame_count += 1
-            if self.frame_count == 0:
-                self.frame_count += 1
-
-        else:
-            for i in self.trashs:
-                i.age += 1
-                if i.age > self.max_age:
-                    i.done = True
-
-                cv2.circle(
-                    frame, (i.center[0], i.center[1]), 3, (0, 0, 126), -1)
-                cv2.rectangle(
-                    frame, (i.cords[0], i.cords[1]), (i.cords[2], i.cords[3]), (0, 252, 124), 2)
-
-                cv2.rectangle(frame, (i.cords[0], i.cords[1] - 20),
-                              (i.cords[0] + 170, i.cords[1]), (0, 252, 124), thickness=2)
-                cv2.rectangle(frame, (i.cords[0], i.cords[1] - 20),
-                              (i.cords[0] + 170, i.cords[1]), (0, 252, 124), -1)
-                cv2.putText(frame, str(i.id) + " " + str(i.age),
-                            (i.cords[0], i.cords[1] - 5), self.font, 0.6, (0, 0, 0), 1, cv2.LINE_AA)
-                if i.center[1] > self.line_down:
-                    i.done = True
-                if i.done:
-                    index = self.trashs.index(i)
-                    self.trashs.pop(index)
-
-            self.frame_count += 1
-            str_down = 'COUNT:' + str(self.cnt_down)
-            cv2.line(frame, (0, self.line_down),
-                     (int(frame.shape[1]), self.line_down), (255, 0, 0), 2)
-            cv2.putText(frame, str_down, (10, 70), self.font,
-                        2.5, (0, 0, 0), 10, cv2.LINE_AA)
-            cv2.putText(frame, str_down, (10, 70), self.font,
-                        2.5, (255, 255, 255), 8, cv2.LINE_AA)
+        return self.cnt_down

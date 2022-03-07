@@ -1,5 +1,4 @@
 # -*- coding: utf-8 --
-import time
 import os
 import threading
 import random
@@ -16,7 +15,7 @@ from pathlib import Path
 
 from yolov5.models.experimental import attempt_load
 from yolov5.utils.datasets import LoadStreams, LoadImages
-from yolov5.utils.general import check_img_size, check_requirements, check_imshow, non_max_suppression, apply_classifier, \
+from yolov5.utils.general import check_img_size, check_imshow, non_max_suppression, \
     scale_coords,  set_logging, increment_path
 from yolov5.utils.torch_utils import select_device
 
@@ -30,20 +29,28 @@ class Counter(object):
         """
         Initialize
         """
-        self.q = deque()
 
         self.opt = opt  # config
-        self.source, weights, self.view_img, self.save_txt, self.imgsz, self.save_img = \
-            opt.source, opt.weights, opt.view_img, opt.save_txt, opt.img_size, opt.save_img
+        self.cnt_down = 0
+        self.line_down = 0
+        self.font = cv2.FONT_HERSHEY_DUPLEX
+        self.source, weights, self.view_img, self.save_txt, self.imgsz, self.save_movie = \
+            opt.source, opt.weights, opt.view_img, opt.save_txt, opt.img_size, opt.save_movie
         self.save_dir = Path(increment_path(Path(opt.project) / opt.name, exist_ok=opt.exist_ok))  # increment run
-        (self.save_dir / 'labels' if self.save_txt else self.save_dir).mkdir(parents=True, exist_ok=True)  # make dir
+        self.save_dir.mkdir(parents=True, exist_ok=True)  # make dir
+        (self.save_dir / 'detected_images').mkdir(parents=True, exist_ok=True)  # make dir
+        (self.save_dir / 'detected_movies').mkdir(parents=True, exist_ok=True)  # make dir
         self.mode = opt.mode
         self.counting_mode = opt.counting_mode
+
+        # for jumpQ
+        self.is_movie_opened = True
+        self.queue_images = deque()
 
         set_logging()
         self.device = select_device(opt.device)
         self.half = self.device.type != 'cpu'  # half precision only supported on CUDA
-        self.max_age = 1 if self.opt.tracking_alg == 'sort' else '3'
+        self.max_age = 1 if self.opt.tracking_alg == 'sort' else 3
         self.tracking_alg = opt.tracking_alg
 
         # Load model
@@ -54,8 +61,6 @@ class Counter(object):
         self.colors = [[random.randint(0, 255) for _ in range(3)] for _ in self.names]
         self.vid_path, self.vid_writer = None, None
         self.dataset = None
-        self.images_q = deque()
-        self.detection_q = deque()
 
         if self.half:
             self.model.half()  # to FP16
@@ -113,7 +118,6 @@ class Counter(object):
                     self.dataset = LoadImages(movie_path, img_size=self.imgsz, stride=self.stride)
                     self.counting(movie_path)
 
-#
     def get_tracker(self, movie_path):
         """
         SortかIou_Trackerどちらかを返す
@@ -132,11 +136,10 @@ class Counter(object):
         """
         basename = os.path.basename(movie_path).replace('.mp4', '')
         movie_id = basename[0:4]
-        # save_movie_path = os.path.join(self.save_dir.name, basename+'.mp4')
-        # print(save_movie_path)
-        self.image_dir = './'
+        self.image_dir = self.save_dir
         height = self.dataset.height
         line_down = int(9*(height/10))
+        self.line_down = line_down
         tracker = None
         if self.tracking_alg == 'sort':
             tracker = Sort(max_age=self.max_age,
@@ -160,8 +163,10 @@ class Counter(object):
         """
 
         """
-        tracker = self.get_tracker(movie_path)
-        if self.counting_mode == 'v2':
+
+        if self.counting_mode == 'v1':
+            tracker = self.get_tracker(movie_path)
+        elif self.counting_mode == 'v2':
             print(len(movie_path))
             t1 = threading.Thread(target=self.jumpQ, args=(movie_path,))
             t1.start()
@@ -179,9 +184,11 @@ class Counter(object):
 
             if self.counting_mode == 'v1':
                 result = self.detect([img, im0s, path])
-                tracker.update(result, img2)
+                self.cnt_down = tracker.update(result, img2)
             elif self.counting_mode == 'v2':
-                self.q.append([img, im0s, path])
+                self.queue_images.append([img, im0s, path, img2])
+
+        self.is_movie_opened = False
 
     def jumpQ(self, movie_path):
         """
@@ -199,42 +206,36 @@ class Counter(object):
         Ps = 0.1
         Pd = 1
         Tw = 10
-        i = 0
-        while self.flag_of_realtime or self.q:
-            print('test')
-            if self.q:
-                i += 1
-                newFrame = self.images_q.popleft()
-                if newFrame is not None:
-                    Ran = random.random()
-                    if len(self.recallq) < 10:
-                        self.detection_q.append(newFrame)
-                        continue
-
-                    if Ran < Pd:
-                        cords = self.detect(newFrame)
-                        if cords:
-                            Pd = 1
-                            self.w = 0
-                            while self.recallq:
-                                img = self.recallq.popleft()
-                                detectQ = self.detect_image(img)
-                                tracker.update(detectQ, img)
-
-                        else:
-                            self.w += 1
-                            if self.w >= Tw:
-                                Pd = max(Pd - Ps, LC)
-                    else:
-                        if Tw > len(self.recallq):
-                            self.recallq.append(newFrame)
-                        else:
-                            self.recallq.append(newFrame)
-                            self.recallq.popleft()
-                else:
+        w = 0
+        stack_images = deque()
+        while self.is_movie_opened or self.queue_images:
+            if self.queue_images:
+                img = self.queue_images.popleft()
+                Ran = random.random()
+                if len(stack_images) < 10:
+                    stack_images.append(img)
                     continue
-        self.time = time.time()-self.time
-        print('end_time:{}'.format(self.time))
+
+                if Ran < Pd:
+                    cords = self.detect(img[:3])
+                    if len(cords) >= 1:
+                        Pd = 1
+                        w = 0
+                        while stack_images:
+                            img = stack_images.popleft()
+                            result = self.detect(img[:3])
+                            tracker.update(result, img[3])
+
+                    else:
+                        w += 1
+                        if w >= Tw:
+                            Pd = max(Pd - Ps, LC)
+                else:
+                    if Tw > len(self.queue_images):
+                        self.queue_images.append(img)
+                    else:
+                        self.queue_images.append(img)
+                        self.queue_images.popleft()
 
     def detect(self, images):
         """
@@ -256,8 +257,10 @@ class Counter(object):
 
         pred = non_max_suppression(pred, self.opt.conf_thres, self.opt.iou_thres, classes=self.opt.classes, agnostic=self.opt.agnostic_nms)
 
-        result = []
-        for i, det in enumerate(pred):  # detections per image
+        dets_results = []
+        conf_results = []
+        fps = '0'
+        for i, dets in enumerate(pred):  # detections per image
             if self.webcam:  # batch_size >= 1
                 p, s, im0, _ = path[i], '%g: ' % i, im0s[i].copy(), self.dataset.count
             else:
@@ -266,29 +269,51 @@ class Counter(object):
             p = Path(p)  # to Path
             save_path = str(self.save_dir / p.name)  # img.jpg
             s += '%gx%g ' % img.shape[2:]  # print string
-            if len(det):
-                det[:, :4] = scale_coords(img.shape[2:], det[:, :4], im0.shape).round()
-                det = det.cpu().numpy()[0]
+            dets[:, :4] = scale_coords(img.shape[2:], dets[:, :4], im0.shape).round()
+            for *det, conf, cls in reversed(dets):
+                det = np.array([c.cpu().numpy() for c in det])
                 det = det.astype(np.int64)
                 cord = det[:4]
-                result.append(np.array(cord))
+                dets_results.append(np.array(cord))
+                conf_results.append(conf)
 
-            if self.save_img:
-                if self.dataset.mode == 'image':
-                    cv2.imwrite(self.save_path, im0)
-                else:  # 'video' or 'stream'
-                    if self.vid_path != save_path:  # new video
-                        self.vid_path = save_path
-                        if isinstance(self.vid_writer, cv2.VideoWriter):
-                            self.vid_writer.release()  # release previous video writer
-                        if self.vid_cap:  # video
-                            fps = self.vid_cap.get(cv2.CAP_PROP_FPS)
-                            w = int(self.vid_cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-                            h = int(self.vid_cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-                        else:  # stream
-                            fps, w, h = 30, im0.shape[1], im0.shape[0]
-                            save_path += '.mp4'
-                        vid_writer = cv2.VideoWriter(save_path, cv2.VideoWriter_fourcc(*'mp4v'), fps, (w, h))
-                    vid_writer.write(im0)
+            if self.save_movie:
+                if self.vid_path != save_path:  # new video
+                    self.vid_path = save_path
+                    if isinstance(self.vid_writer, cv2.VideoWriter):
+                        self.vid_writer.release()  # release previous video writer
+                    if self.vid_cap:  # video
+                        fps = self.vid_cap.get(cv2.CAP_PROP_FPS)
+                        w = int(self.vid_cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+                        h = int(self.vid_cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                    else:  # stream
+                        fps, w, h = 30, im0.shape[1], im0.shape[0]
+                        save_path += '.mp4'
+                    self.vid_writer = cv2.VideoWriter('test.mp4', cv2.VideoWriter_fourcc(*'mp4v'), fps, (w, h))
 
-        return np.array(result)
+                str_down = 'COUNT:' + str(self.cnt_down)
+                cv2.line(im0, (0, self.line_down),
+                         (int(im0.shape[1]), self.line_down), (255, 0, 0), 2)
+                cv2.putText(im0, str_down, (10, 70), self.font,
+                            2.0, (0, 0, 0), 10, cv2.LINE_AA)
+                cv2.putText(im0, str_down, (10, 70), self.font,
+                            2.0, (255, 255, 255), 8, cv2.LINE_AA)
+
+                for d, conf in zip(dets_results, conf_results):
+                    center_x = (d[0]+d[2])//2
+                    center_y = (d[1]+d[3])//2
+                    if self.line_down >= center_y:
+                        cv2.circle(im0, (center_x, center_y), 3, (0, 0, 126), -1)
+                        cv2.rectangle(
+                            im0, (d[0], d[1]), (d[2], d[3]), (0, 252, 124), 2)
+
+                        cv2.rectangle(im0, (d[0], d[1] - 20),
+                                      (d[0] + 60, d[1]), (0, 252, 124), thickness=2)
+                        cv2.rectangle(im0, (d[0], d[1] - 20),
+                                      (d[0] + 60, d[1]), (0, 252, 124), -1)
+                        cv2.putText(im0, str(int(conf.item() * 100))+'%',
+                                    (d[0], d[1] - 5), self.font, 0.6, (0, 0, 0), 1, cv2.LINE_AA)
+
+                self.vid_writer.write(im0)
+
+        return np.array(dets_results)
