@@ -1,0 +1,12 @@
+
+path: /home/quantan/DTCdataset/DTCcocoformat  # dataset root dir
+train: images/train  # train images (relative to 'path') 128 images
+val: images/test  # val images (relative to 'path') 128 images
+test:  # test images (optional)
+
+# Classes
+nc: 1  # number of classes
+names: ['trash']  # class names
+
+
+# Download script/URL (optional)

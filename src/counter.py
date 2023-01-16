@@ -16,12 +16,25 @@ from pathlib import Path
 from yolov5.models.experimental import attempt_load
 from yolov5.utils.datasets import LoadStreams, LoadImages
 from yolov5.utils.general import check_img_size, check_imshow, non_max_suppression, \
-    scale_coords,  set_logging, increment_path
+    scale_coords, set_logging, increment_path
 from yolov5.utils.torch_utils import select_device
 
 cudnn.benchmark = True
 
 VIDEO_FORMATS = ['mov', 'avi', 'mp4', 'mpg', 'mpeg', 'm4v', 'wmv', 'mkv']  # acceptable video suffixes
+
+
+def convert_to_latlng(lat, lng):
+    lat = lat.split('.')
+    lng = lng.split('.')
+    lat[2] = lat[2][:2] + '.' + lat[2][2]
+    lng[2] = lng[2][:2] + '.' + lng[2][2]
+    print(lat[2])
+    print(lng[2])
+
+    lat = (float(lat[2]) / 3600) + (int(lat[1]) / 60) + int(lat[0])
+    lng = (float(lng[2]) / 3600) + (int(lng[1]) / 60) + int(lng[0])
+    return lat, lng
 
 
 class Counter(object):
@@ -66,7 +79,8 @@ class Counter(object):
             self.model.half()  # to FP16
 
         if self.device.type != 'cpu':
-            self.model(torch.zeros(1, 3, self.imgsz, self.imgsz).to(self.device).type_as(next(self.model.parameters())))  # run once
+            self.model(torch.zeros(1, 3, self.imgsz, self.imgsz).to(
+                self.device).type_as(next(self.model.parameters())))  # run once
         if self.mode == 'webcam':
             self.movies = []
             self.webcam = True
@@ -138,7 +152,7 @@ class Counter(object):
         movie_id = basename[0:4]
         self.image_dir = self.save_dir
         height = self.dataset.height
-        line_down = int(9*(height/10))
+        line_down = int(9 * (height / 10))
         self.line_down = line_down
         tracker = None
         if self.tracking_alg == 'sort':
@@ -159,7 +173,7 @@ class Counter(object):
 
         return tracker
 
-    def counting(self,  movie_path):
+    def counting(self, movie_path):
         """
 
         """
@@ -255,7 +269,8 @@ class Counter(object):
         img, im0s, path = images
         pred = self.model(img, augment=self.opt.augment)[0]
 
-        pred = non_max_suppression(pred, self.opt.conf_thres, self.opt.iou_thres, classes=self.opt.classes, agnostic=self.opt.agnostic_nms)
+        pred = non_max_suppression(pred, self.opt.conf_thres, self.opt.iou_thres,
+                                   classes=self.opt.classes, agnostic=self.opt.agnostic_nms)
 
         dets_results = []
         conf_results = []
@@ -300,8 +315,8 @@ class Counter(object):
                             2.0, (255, 255, 255), 8, cv2.LINE_AA)
 
                 for d, conf in zip(dets_results, conf_results):
-                    center_x = (d[0]+d[2])//2
-                    center_y = (d[1]+d[3])//2
+                    center_x = (d[0] + d[2]) // 2
+                    center_y = (d[1] + d[3]) // 2
                     if self.line_down >= center_y:
                         cv2.circle(im0, (center_x, center_y), 3, (0, 0, 126), -1)
                         cv2.rectangle(
@@ -311,7 +326,7 @@ class Counter(object):
                                       (d[0] + 60, d[1]), (0, 252, 124), thickness=2)
                         cv2.rectangle(im0, (d[0], d[1] - 20),
                                       (d[0] + 60, d[1]), (0, 252, 124), -1)
-                        cv2.putText(im0, str(int(conf.item() * 100))+'%',
+                        cv2.putText(im0, str(int(conf.item() * 100)) + '%',
                                     (d[0], d[1] - 5), self.font, 0.6, (0, 0, 0), 1, cv2.LINE_AA)
 
                 self.vid_writer.write(im0)
