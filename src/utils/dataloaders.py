@@ -268,6 +268,7 @@ class LoadImages:
         self.vid_stride = vid_stride  # video frame-rate stride
         if any(videos):
             self._new_video(videos[0])  # new video
+            self.width, self.height = self.cap.get(3), self.cap.get(4)
         else:
             self.cap = None
         assert self.nf > 0, f'No images or videos found in {p}. ' \

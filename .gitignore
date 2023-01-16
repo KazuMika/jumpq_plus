@@ -27,9 +27,8 @@
 !cfg/yolov3*.cfg
 
 /src/runs/
-/src/yolov5/runs_yolov5m/
-/src/yolov5/weights/
-/src/yolov5/data/
+/src/weights/
+/src/data/
 !data/images/zidane.jpg
 !data/images/bus.jpg
 !data/coco.names

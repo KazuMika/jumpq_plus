@@ -13,11 +13,13 @@ from tracker.sort import Sort
 from tracker.iou_tracking import Iou_Tracker
 from pathlib import Path
 
-from yolov5.models.experimental import attempt_load
-from yolov5.utils.datasets import LoadStreams, LoadImages
-from yolov5.utils.general import check_img_size, check_imshow, non_max_suppression, \
-    scale_coords, set_logging, increment_path
-from yolov5.utils.torch_utils import select_device
+from models.experimental import attempt_load
+
+from utils.dataloaders import IMG_FORMATS, VID_FORMATS, LoadImages, LoadScreenshots, LoadStreams
+from utils.general import (LOGGER, Profile, check_file, check_img_size, check_imshow, check_requirements, colorstr,
+                           increment_path, non_max_suppression, print_args, scale_boxes, strip_optimizer, xyxy2xywh)
+from utils.plots import Annotator, colors, save_one_box
+from utils.torch_utils import select_device, smart_inference_mode
 
 cudnn.benchmark = True
 
@@ -60,14 +62,14 @@ class Counter(object):
         self.is_movie_opened = True
         self.queue_images = deque()
 
-        set_logging()
+        # set_logging()
         self.device = select_device(opt.device)
         self.half = self.device.type != 'cpu'  # half precision only supported on CUDA
         self.max_age = 1 if self.opt.tracking_alg == 'sort' else 3
         self.tracking_alg = opt.tracking_alg
 
         # Load model
-        self.model = attempt_load(weights, map_location=self.device)  # load FP32 model
+        self.model = attempt_load(weights, device=self.device)  # load FP32 model
         self.stride = int(self.model.stride.max())  # model stride
         self.imgsz = check_img_size(self.imgsz, s=self.stride)  # check img_size
         self.names = self.model.module.names if hasattr(self.model, 'module') else self.model.names
@@ -185,7 +187,7 @@ class Counter(object):
             t1 = threading.Thread(target=self.jumpQ, args=(movie_path,))
             t1.start()
 
-        for path, img, im0s, vid_cap in self.dataset:
+        for path, img, im0s, vid_cap, s in self.dataset:
             self.vid_cap = vid_cap
 
             img2 = img.copy()
@@ -284,7 +286,7 @@ class Counter(object):
             p = Path(p)  # to Path
             save_path = str(self.save_dir / p.name)  # img.jpg
             s += '%gx%g ' % img.shape[2:]  # print string
-            dets[:, :4] = scale_coords(img.shape[2:], dets[:, :4], im0.shape).round()
+            dets[:, :4] = scale_boxes(img.shape[2:], dets[:, :4], im0.shape).round()
             for *det, conf, cls in reversed(dets):
                 det = np.array([c.cpu().numpy() for c in det])
                 det = det.astype(np.int64)
