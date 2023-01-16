@@ -1,42 +1,27 @@
-# -*- coding: utf-8 --
-import os
-import threading
-import random
-from collections import deque
-import cv2
-import numpy as np
-import torch
-import torch.backends.cudnn as cudnn
-import glob
-
-from tracker.sort import Sort
-from tracker.iou_tracking import Iou_Tracker
-from pathlib import Path
-
-from models.experimental import attempt_load
-
-from utils.dataloaders import IMG_FORMATS, VID_FORMATS, LoadImages, LoadScreenshots, LoadStreams
+from utils.torch_utils import select_device, smart_inference_mode
+from utils.plots import Annotator, colors, save_one_box
 from utils.general import (LOGGER, Profile, check_file, check_img_size, check_imshow, check_requirements, colorstr,
                            increment_path, non_max_suppression, print_args, scale_boxes, strip_optimizer, xyxy2xywh)
-from utils.plots import Annotator, colors, save_one_box
-from utils.torch_utils import select_device, smart_inference_mode
+from utils.dataloaders import IMG_FORMATS, VID_FORMATS, LoadImages, LoadScreenshots, LoadStreams
+from models.experimental import attempt_load
+from pathlib import Path
+from tracker.iou_tracking import Iou_Tracker
+from tracker.sort import Sort
+import glob
+import torch.backends.cudnn as cudnn
+import torch
+import numpy as np
+import cv2
+from collections import deque
+import random
+import threading
+import os
+import csv
+
 
 cudnn.benchmark = True
 
 VIDEO_FORMATS = ['mov', 'avi', 'mp4', 'mpg', 'mpeg', 'm4v', 'wmv', 'mkv']  # acceptable video suffixes
-
-
-def convert_to_latlng(lat, lng):
-    lat = lat.split('.')
-    lng = lng.split('.')
-    lat[2] = lat[2][:2] + '.' + lat[2][2]
-    lng[2] = lng[2][:2] + '.' + lng[2][2]
-    print(lat[2])
-    print(lng[2])
-
-    lat = (float(lat[2]) / 3600) + (int(lat[1]) / 60) + int(lat[0])
-    lng = (float(lng[2]) / 3600) + (int(lng[1]) / 60) + int(lng[0])
-    return lat, lng
 
 
 class Counter(object):
@@ -46,7 +31,7 @@ class Counter(object):
         """
 
         self.opt = opt  # config
-        self.cnt_down = 0
+        self.cnt_down = self.pre_cnt_down = 0
         self.line_down = 0
         self.font = cv2.FONT_HERSHEY_DUPLEX
         self.source, weights, self.view_img, self.save_txt, self.imgsz, self.save_movie = \
@@ -55,6 +40,10 @@ class Counter(object):
         self.save_dir.mkdir(parents=True, exist_ok=True)  # make dir
         (self.save_dir / 'detected_images').mkdir(parents=True, exist_ok=True)  # make dir
         (self.save_dir / 'detected_movies').mkdir(parents=True, exist_ok=True)  # make dir
+        self.save_images_dir = self.save_dir / 'detected_images'
+        self.save_movies_dir = self.save_dir / 'detected_movies'
+        self.f = open(self.save_dir / 'count_result.csv', 'w')
+        self.csv_writer = csv.writer(self.f)
         self.mode = opt.mode
         self.counting_mode = opt.counting_mode
 
@@ -132,7 +121,11 @@ class Counter(object):
             else:
                 for movie_path in self.movies:
                     self.dataset = LoadImages(movie_path, img_size=self.imgsz, stride=self.stride)
+                    print(movie_path)
                     self.counting(movie_path)
+                    self.csv_writer.writerow([self.cnt_down])
+
+        self.f.close()
 
     def get_tracker(self, movie_path):
         """
@@ -284,7 +277,7 @@ class Counter(object):
                 p, s, im0, _ = path, '', im0s, getattr(self.dataset, 'frame', 0)
 
             p = Path(p)  # to Path
-            save_path = str(self.save_dir / p.name)  # img.jpg
+            save_path = str(self.save_movies_dir / p.name)  # img.jpg
             s += '%gx%g ' % img.shape[2:]  # print string
             dets[:, :4] = scale_boxes(img.shape[2:], dets[:, :4], im0.shape).round()
             for *det, conf, cls in reversed(dets):
@@ -305,8 +298,9 @@ class Counter(object):
                         h = int(self.vid_cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
                     else:  # stream
                         fps, w, h = 30, im0.shape[1], im0.shape[0]
-                        save_path += '.mp4'
-                    self.vid_writer = cv2.VideoWriter('test.mp4', cv2.VideoWriter_fourcc(*'mp4v'), fps, (w, h))
+                    save_vid_path = save_path + '.mp4'
+                    self.vid_writer = cv2.VideoWriter(save_vid_path,
+                                                      cv2.VideoWriter_fourcc(*'mp4v'), fps, (w, h))
 
                 str_down = 'COUNT:' + str(self.cnt_down)
                 cv2.line(im0, (0, self.line_down),
@@ -319,18 +313,23 @@ class Counter(object):
                 for d, conf in zip(dets_results, conf_results):
                     center_x = (d[0] + d[2]) // 2
                     center_y = (d[1] + d[3]) // 2
-                    if self.line_down >= center_y:
-                        cv2.circle(im0, (center_x, center_y), 3, (0, 0, 126), -1)
-                        cv2.rectangle(
-                            im0, (d[0], d[1]), (d[2], d[3]), (0, 252, 124), 2)
+                    # if self.line_down >= center_y:
+                    cv2.circle(im0, (center_x, center_y), 3, (0, 0, 126), -1)
+                    cv2.rectangle(
+                        im0, (d[0], d[1]), (d[2], d[3]), (0, 252, 124), 2)
 
-                        cv2.rectangle(im0, (d[0], d[1] - 20),
-                                      (d[0] + 60, d[1]), (0, 252, 124), thickness=2)
-                        cv2.rectangle(im0, (d[0], d[1] - 20),
-                                      (d[0] + 60, d[1]), (0, 252, 124), -1)
-                        cv2.putText(im0, str(int(conf.item() * 100)) + '%',
-                                    (d[0], d[1] - 5), self.font, 0.6, (0, 0, 0), 1, cv2.LINE_AA)
+                    cv2.rectangle(im0, (d[0], d[1] - 20),
+                                  (d[0] + 60, d[1]), (0, 252, 124), thickness=2)
+                    cv2.rectangle(im0, (d[0], d[1] - 20),
+                                  (d[0] + 60, d[1]), (0, 252, 124), -1)
+                    cv2.putText(im0, str(int(conf.item() * 100)) + '%',
+                                (d[0], d[1] - 5), self.font, 0.6, (0, 0, 0), 1, cv2.LINE_AA)
 
                 self.vid_writer.write(im0)
+                if self.cnt_down != self.pre_cnt_down:
+                    save_img_path = str(self.save_images_dir / p.name)  # img.jpg
+                    save_image_path = save_img_path + '_' + str(self.cnt_down).zfill(4) + '.jpg'
+                    cv2.imwrite(save_image_path, im0)
+                    self.pre_cnt_down = self.cnt_down
 
         return np.array(dets_results)
