@@ -281,6 +281,8 @@ class Sort(object):
                 if(trk.time_since_update > self.max_age) or trk.done:
                     self.trackers.pop(i)
 
+        return self.cnt_down
+
 
 @jit
 def iou(boxA, boxB):
