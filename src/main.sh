@@ -17,8 +17,7 @@
 #python main.py --tracking_alg iou --counting_mode v1 --mode video
 
 
-python main.py --tracking_alg iou --counting_mode v1 --mode video --source /home/quantan/DTCdataset/DTC_counting_test_movie_1_8
-
+python main.py --tracking_alg sort --counting_mode v1 --mode video --source ./sample_movie.mp4
 # v1 & jetson nano & sort
 #python main.py --counting_mode v2 --mode video --tracking_alg sort 
 

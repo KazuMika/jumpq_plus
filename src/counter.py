@@ -54,7 +54,7 @@ class Counter(object):
         # set_logging()
         self.device = select_device(opt.device)
         self.half = self.device.type != 'cpu'  # half precision only supported on CUDA
-        self.max_age = 1 if self.opt.tracking_alg == 'sort' else 3
+        self.max_age = 3 if self.opt.tracking_alg == 'sort' else 3
         self.tracking_alg = opt.tracking_alg
 
         # Load model
@@ -122,7 +122,9 @@ class Counter(object):
                 for movie_path in self.movies:
                     self.dataset = LoadImages(movie_path, img_size=self.imgsz, stride=self.stride)
                     print(movie_path)
+                    print(self.cnt_down)
                     self.counting(movie_path)
+
                     self.csv_writer.writerow([self.cnt_down])
 
         self.f.close()
@@ -172,11 +174,9 @@ class Counter(object):
         """
 
         """
-
         if self.counting_mode == 'v1':
             tracker = self.get_tracker(movie_path)
         elif self.counting_mode == 'v2':
-            print(len(movie_path))
             t1 = threading.Thread(target=self.jumpQ, args=(movie_path,))
             t1.start()
 
@@ -269,7 +269,6 @@ class Counter(object):
 
         dets_results = []
         conf_results = []
-        fps = '0'
         for i, dets in enumerate(pred):  # detections per image
             if self.webcam:  # batch_size >= 1
                 p, s, im0, _ = path[i], '%g: ' % i, im0s[i].copy(), self.dataset.count
@@ -277,7 +276,6 @@ class Counter(object):
                 p, s, im0, _ = path, '', im0s, getattr(self.dataset, 'frame', 0)
 
             p = Path(p)  # to Path
-            save_path = str(self.save_movies_dir / p.name)  # img.jpg
             s += '%gx%g ' % img.shape[2:]  # print string
             dets[:, :4] = scale_boxes(img.shape[2:], dets[:, :4], im0.shape).round()
             for *det, conf, cls in reversed(dets):
@@ -288,48 +286,54 @@ class Counter(object):
                 conf_results.append(conf)
 
             if self.save_movie:
-                if self.vid_path != save_path:  # new video
-                    self.vid_path = save_path
-                    if isinstance(self.vid_writer, cv2.VideoWriter):
-                        self.vid_writer.release()  # release previous video writer
-                    if self.vid_cap:  # video
-                        fps = self.vid_cap.get(cv2.CAP_PROP_FPS)
-                        w = int(self.vid_cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-                        h = int(self.vid_cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-                    else:  # stream
-                        fps, w, h = 30, im0.shape[1], im0.shape[0]
-                    save_vid_path = save_path + '.mp4'
-                    self.vid_writer = cv2.VideoWriter(save_vid_path,
-                                                      cv2.VideoWriter_fourcc(*'mp4v'), fps, (w, h))
-
-                str_down = 'COUNT:' + str(self.cnt_down)
-                cv2.line(im0, (0, self.line_down),
-                         (int(im0.shape[1]), self.line_down), (255, 0, 0), 2)
-                cv2.putText(im0, str_down, (10, 70), self.font,
-                            2.0, (0, 0, 0), 10, cv2.LINE_AA)
-                cv2.putText(im0, str_down, (10, 70), self.font,
-                            2.0, (255, 255, 255), 8, cv2.LINE_AA)
-
-                for d, conf in zip(dets_results, conf_results):
-                    center_x = (d[0] + d[2]) // 2
-                    center_y = (d[1] + d[3]) // 2
-                    # if self.line_down >= center_y:
-                    cv2.circle(im0, (center_x, center_y), 3, (0, 0, 126), -1)
-                    cv2.rectangle(
-                        im0, (d[0], d[1]), (d[2], d[3]), (0, 252, 124), 2)
-
-                    cv2.rectangle(im0, (d[0], d[1] - 20),
-                                  (d[0] + 60, d[1]), (0, 252, 124), thickness=2)
-                    cv2.rectangle(im0, (d[0], d[1] - 20),
-                                  (d[0] + 60, d[1]), (0, 252, 124), -1)
-                    cv2.putText(im0, str(int(conf.item() * 100)) + '%',
-                                (d[0], d[1] - 5), self.font, 0.6, (0, 0, 0), 1, cv2.LINE_AA)
-
-                self.vid_writer.write(im0)
-                if self.cnt_down != self.pre_cnt_down:
-                    save_img_path = str(self.save_images_dir / p.name)  # img.jpg
-                    save_image_path = save_img_path + '_' + str(self.cnt_down).zfill(4) + '.jpg'
-                    cv2.imwrite(save_image_path, im0)
-                    self.pre_cnt_down = self.cnt_down
+                self.make_movie_and_images(p, im0, dets_results, conf_results)
 
         return np.array(dets_results)
+
+    def make_movie_and_images(self, p, im0, dets_results, conf_results):
+        save_path = str(self.save_movies_dir / p.name)  # img.jpg
+        if self.vid_path != save_path:  # new video
+            self.vid_path = save_path
+            if isinstance(self.vid_writer, cv2.VideoWriter):
+                self.vid_writer.release()  # release previous video writer
+            if self.vid_cap:  # video
+                fps = self.vid_cap.get(cv2.CAP_PROP_FPS)
+                w = int(self.vid_cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+                h = int(self.vid_cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            else:  # stream
+                fps, w, h = 30, im0.shape[1], im0.shape[0]
+            save_vid_path = save_path + '.mp4'
+            self.vid_writer = cv2.VideoWriter(save_vid_path,
+                                              cv2.VideoWriter_fourcc(*'mp4v'), fps, (w, h))
+
+        str_down = 'COUNT:' + str(self.cnt_down)
+
+        cv2.line(im0, (0, self.line_down),
+                 (int(im0.shape[1]), self.line_down), (255, 0, 0), 2)
+        cv2.putText(im0, str_down, (10, 70), self.font,
+                    2.0, (0, 0, 0), 10, cv2.LINE_AA)
+        cv2.putText(im0, str_down, (10, 70), self.font,
+                    2.0, (255, 255, 255), 8, cv2.LINE_AA)
+
+        for d, conf in zip(dets_results, conf_results):
+            center_x = (d[0] + d[2]) // 2
+            center_y = (d[1] + d[3]) // 2
+            # if self.line_down >= center_y:
+            cv2.circle(im0, (center_x, center_y), 3, (0, 0, 126), -1)
+            cv2.rectangle(
+                im0, (d[0], d[1]), (d[2], d[3]), (0, 252, 124), 2)
+
+            cv2.rectangle(im0, (d[0], d[1] - 20),
+                          (d[0] + 60, d[1]), (0, 252, 124), thickness=2)
+            cv2.rectangle(im0, (d[0], d[1] - 20),
+                          (d[0] + 60, d[1]), (0, 252, 124), -1)
+            cv2.putText(im0, str(int(conf.item() * 100)) + '%',
+                        (d[0], d[1] - 5), self.font, 0.6, (0, 0, 0), 1, cv2.LINE_AA)
+
+        self.vid_writer.write(im0)
+        if self.cnt_down != self.pre_cnt_down:
+            save_img_path = str(self.save_images_dir / p.name)  # img.jpg
+            save_image_path = save_img_path + '_' + str(self.cnt_down).zfill(4) + '.jpg'
+            cv2.imwrite(save_image_path, im0)
+            print(save_image_path)
+            self.pre_cnt_down = self.cnt_down
