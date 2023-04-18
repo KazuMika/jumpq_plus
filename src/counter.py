@@ -17,6 +17,7 @@ import random
 import threading
 import os
 import csv
+import time
 
 
 cudnn.benchmark = True
@@ -38,6 +39,7 @@ class Counter(object):
             opt.source, opt.weights, opt.view_img, opt.save_txt, opt.img_size, opt.save_movie
         self.save_dir = Path(increment_path(Path(opt.project) / opt.name, exist_ok=opt.exist_ok))  # increment run
         self.save_dir.mkdir(parents=True, exist_ok=True)  # make dir
+        self.weights = weights
         (self.save_dir / 'detected_images').mkdir(parents=True, exist_ok=True)  # make dir
         (self.save_dir / 'detected_movies').mkdir(parents=True, exist_ok=True)  # make dir
         self.save_images_dir = self.save_dir / 'detected_images'
@@ -122,10 +124,14 @@ class Counter(object):
                 for movie_path in self.movies:
                     self.dataset = LoadImages(movie_path, img_size=self.imgsz, stride=self.stride)
                     print(movie_path)
-                    print(self.cnt_down)
+                    self.cnt_down = self.pre_cnt_down = 0
                     self.counting(movie_path)
-
-                    self.csv_writer.writerow([self.cnt_down])
+                    if self.counting_mode == 'v1':
+                        self.csv_writer.writerow([self.cnt_down])
+                    else:
+                        while self.is_movie_opened or self.queue_images:
+                            time.sleep(1.0)
+                    print(self.cnt_down)
 
         self.f.close()
 
@@ -174,10 +180,11 @@ class Counter(object):
         """
 
         """
+        self.is_movie_opened = True
         if self.counting_mode == 'v1':
             tracker = self.get_tracker(movie_path)
         elif self.counting_mode == 'v2':
-            t1 = threading.Thread(target=self.jumpQ, args=(movie_path,))
+            t1 = threading.Thread(target=self.jumpQ, args=(movie_path,),daemon=True)
             t1.start()
 
         for path, img, im0s, vid_cap, s in self.dataset:
@@ -198,6 +205,7 @@ class Counter(object):
                 self.queue_images.append([img, im0s, path, img2])
 
         self.is_movie_opened = False
+        self.data_set = None
 
     def jumpQ(self, movie_path):
         """
@@ -226,7 +234,7 @@ class Counter(object):
                     continue
 
                 Ran = random.random()
-                if Ran < Pd:
+                if Ran < 1:
                     cords = self.detect(img[:3])
                     if len(cords) >= 1:
                         Pd = 1
@@ -234,7 +242,7 @@ class Counter(object):
                         while stack_images:
                             img = stack_images.popleft()
                             result = self.detect(img[:3])
-                            tracker.update(result, img[3])
+                            self.cnt_down = tracker.update(result, img[3])
 
                     else:
                         w += 1
@@ -246,6 +254,7 @@ class Counter(object):
                     else:
                         self.queue_images.append(img)
                         self.queue_images.popleft()
+
 
     def detect(self, images):
         """
