@@ -211,20 +211,21 @@ class Counter(object):
         """
         tracker = self.get_tracker(movie_path)
         # LC = self.l/self.frame_rate
-        LC = 10.0 / 20.0
-        Ps = 0.1
-        Pd = 1
-        Tw = 10
         w = 0
+        Pd = 1 # 検出する閾値
+        Ps = 0.1  # 閾値Pdを下げる量
+        Tw = 10 # 何frame検出しない場合閾値PdをPs分下げるのか
+        K = 10 # queueに溜めるframe数
+        LC = 10.0 / 20.0 # Pdの下限
         stack_images = deque()
         while self.is_movie_opened or self.queue_images:
             if self.queue_images:
                 img = self.queue_images.popleft()
-                Ran = random.random()
-                if len(stack_images) < 10:
+                if len(stack_images) < K:
                     stack_images.append(img)
                     continue
 
+                Ran = random.random()
                 if Ran < Pd:
                     cords = self.detect(img[:3])
                     if len(cords) >= 1:
@@ -335,5 +336,4 @@ class Counter(object):
             save_img_path = str(self.save_images_dir / p.name)  # img.jpg
             save_image_path = save_img_path + '_' + str(self.cnt_down).zfill(4) + '.jpg'
             cv2.imwrite(save_image_path, im0)
-            print(save_image_path)
             self.pre_cnt_down = self.cnt_down
