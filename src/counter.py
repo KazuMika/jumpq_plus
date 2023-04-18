@@ -48,6 +48,7 @@ class Counter(object):
         self.csv_writer = csv.writer(self.f)
         self.mode = opt.mode
         self.counting_mode = opt.counting_mode
+        self.frame_num = 0
 
         # for jumpQ
         self.is_movie_opened = True
@@ -181,6 +182,9 @@ class Counter(object):
 
         """
         self.is_movie_opened = True
+        self.queue_images = deque()
+        self.frame_num = 0
+        t = time.time()
         if self.counting_mode == 'v1':
             tracker = self.get_tracker(movie_path)
         elif self.counting_mode == 'v2':
@@ -189,6 +193,7 @@ class Counter(object):
 
         for path, img, im0s, vid_cap, s in self.dataset:
             self.vid_cap = vid_cap
+            self.frame_num += 1
 
             img2 = img.copy()
 
@@ -205,7 +210,8 @@ class Counter(object):
                 self.queue_images.append([img, im0s, path, img2])
 
         self.is_movie_opened = False
-        self.data_set = None
+
+
 
     def jumpQ(self, movie_path):
         """
@@ -219,6 +225,7 @@ class Counter(object):
         """
         tracker = self.get_tracker(movie_path)
         # LC = self.l/self.frame_rate
+        t = time.time()
         w = 0
         Pd = 1 # 検出する閾値
         Ps = 0.1  # 閾値Pdを下げる量
@@ -254,6 +261,11 @@ class Counter(object):
                     else:
                         self.queue_images.append(img)
                         self.queue_images.popleft()
+
+
+        t = time.time()-t
+        frame_rate = self.frame_num / t
+        print(f'frame rate: {frame_rate:0.2f}fps')
 
 
     def detect(self, images):
