@@ -54,7 +54,7 @@ class Counter(object):
         # set_logging()
         self.device = select_device(opt.device)
         self.half = self.device.type != 'cpu'  # half precision only supported on CUDA
-        self.max_age = 3 if self.opt.tracking_alg == 'sort' else 3
+        self.max_age = 2 if self.opt.tracking_alg == 'sort' else 3
         self.tracking_alg = opt.tracking_alg
 
         # Load model
@@ -331,10 +331,8 @@ class Counter(object):
                         (d[0], d[1] - 5), self.font, 0.6, (0, 0, 0), 1, cv2.LINE_AA)
 
         self.vid_writer.write(im0)
-        print(self.cnt_down, self.pre_cnt_down)
         if self.cnt_down != self.pre_cnt_down:
             save_img_path = str(self.save_images_dir / p.name)  # img.jpg
             save_image_path = save_img_path + '_' + str(self.cnt_down).zfill(4) + '.jpg'
             cv2.imwrite(save_image_path, im0)
-            print(save_image_path)
             self.pre_cnt_down = self.cnt_down
