@@ -1,9 +1,7 @@
 # -*- coding: utf-8 -*-
-import os
 import torch.backends.cudnn as cudnn
 import argparse
 from counter import Counter
-import time
 
 cudnn.benchmark = True
 

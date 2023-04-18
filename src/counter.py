@@ -54,7 +54,7 @@ class Counter(object):
         # set_logging()
         self.device = select_device(opt.device)
         self.half = self.device.type != 'cpu'  # half precision only supported on CUDA
-        self.max_age = 3 if self.opt.tracking_alg == 'sort' else 3
+        self.max_age = 2 if self.opt.tracking_alg == 'sort' else 3
         self.tracking_alg = opt.tracking_alg
 
         # Load model
