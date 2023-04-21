@@ -276,7 +276,7 @@ class Counter(object):
 
                 Ran = random.random()
                 if Ran < Pd:
-                    cords = self.detect(img[:3])
+                    cords = self.detect(img)
                     if len(cords) >= 1:
                         Pd = 1
                         w = 0
