@@ -94,7 +94,7 @@ class Iou_Tracker(object):
 
         return sets
 
-    def update(self,  cords2,  frame):
+    def update(self,cords2=np.empty((0, 5))):
         sets = self.match_trash(cords2)
 
         if sets is not None:

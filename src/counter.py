@@ -242,9 +242,9 @@ class Counter(object):
 
             if self.counting_mode == 'v1':
                 result = self.detect([img, im0s, path])
-                self.cnt_down = tracker.update(result, img2)
+                self.cnt_down = tracker.update(result)
             elif self.counting_mode == 'v2':
-                self.queue_images.append([img, im0s, path, img2])
+                self.queue_images.append([img, im0s, path])
 
         self.is_movie_opened = False
 
@@ -280,18 +280,17 @@ class Counter(object):
                     if len(cords) >= 1:
                         Pd = 1
                         w = 0
-                        self.cnt_down = tracker.update(cords,img[3])
                         while jump_queue:
                             img = jump_queue.popleft()
-                            result = self.detect(img[:3])
-                            self.cnt_down = tracker.update(result, img[3])
+                            result = self.detect(img)
+                            self.cnt_down = tracker.update(result)
 
                     else:
                         w += 1
                         if w >= Tw:
                             Pd = max(Pd - Ps, LC)
                             w = 0
-                    self.cnt_down = tracker.update(cords, img[3])
+                    self.cnt_down = tracker.update(cords)
                 else:
                     jump_queue.append(img)
 
