@@ -114,7 +114,7 @@ class Iou_Tracker(object):
                                     self.cnt_down += 1
                                     i.state = False
                                     i.done = True
-                                    print("ID:", i.id, 'crossed', self.cnt_down)
+                                    #print("ID:", i.id, 'crossed', self.cnt_down)
 
                 elif trash_id == 0 and _center[1] < self.line_down:
                     t = Trash(self.t_id, cord, _center, self.max_age)

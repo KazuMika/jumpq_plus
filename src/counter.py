@@ -44,11 +44,11 @@ class Counter(object):
         (self.save_dir / 'detected_movies').mkdir(parents=True, exist_ok=True)  # make dir
         self.save_images_dir = self.save_dir / 'detected_images'
         self.save_movies_dir = self.save_dir / 'detected_movies'
-        self.f = open(self.save_dir / 'count_result.csv', 'w')
-        self.csv_writer = csv.writer(self.f)
         self.mode = opt.mode
         self.counting_mode = opt.counting_mode
         self.frame_num = 0
+        self.save_image = opt.save_image
+        self.number_exp = 0
 
         # for jumpQ
         self.is_movie_opened = True
@@ -115,24 +115,61 @@ class Counter(object):
         検出をする際はこのメソッドを使用する
         """
         with torch.no_grad():
-            if self.webcam:
-                movie = '0'
-                self.view_img = check_imshow()
-                cudnn.benchmark = True
-                self.dataset = LoadStreams(movie, img_size=self.imgsz, stride=self.stride)
-                self.counting(movie)
-            else:
-                for movie_path in self.movies:
-                    self.dataset = LoadImages(movie_path, img_size=self.imgsz, stride=self.stride)
-                    print(movie_path)
-                    self.cnt_down = self.pre_cnt_down = 0
-                    self.counting(movie_path)
-                    if self.counting_mode == 'v1':
-                        self.csv_writer.writerow([self.cnt_down])
-                    else:
-                        while self.is_movie_opened or self.queue_images:
-                            time.sleep(1.0)
-                    print(self.cnt_down)
+            with open(self.save_dir / 'count_result.csv', 'w') as f:
+                self.csv_writer = csv.writer(f)
+                if self.webcam:
+                    movie = '0'
+                    self.view_img = check_imshow()
+                    cudnn.benchmark = True
+                    self.dataset = LoadStreams(movie, img_size=self.imgsz, stride=self.stride)
+                    self.counting(movie)
+                else:
+                    for movie_path in self.movies:
+                        self.dataset = LoadImages(movie_path, img_size=self.imgsz, stride=self.stride)
+                        print(movie_path)
+                        self.cnt_down = self.pre_cnt_down = 0
+                        self.counting(movie_path)
+                        if self.counting_mode == 'v1':
+                            self.csv_writer.writerow([self.cnt_down])
+                        else:
+                            while self.is_movie_opened or self.queue_images:
+                                time.sleep(1.0)
+                            self.csv_writer.writerow([self.cnt_down])
+                        print(self.cnt_down)
+
+
+    def excute_grid_search(self):
+        """
+        実際にcountingを実行する
+        検出をする際はこのメソッドを使用する
+        """
+        with open(self.save_dir / 'hyperparameter_optimization.csv', 'w') as hy,\
+                open(self.save_dir / 'count_result.csv', 'w') as f:
+            self.ho = csv.writer(hy)
+            self.csv_writer = csv.writer(f)
+            self.number_exp = 0
+            K = 10
+            with torch.no_grad():
+                movie_path  = self.movies.pop()
+                for Tw in range(2,21):
+                    for LC in range(1,10):
+                        for Ps in range(1,10):
+                            self.number_exp += 1
+                            self.Ps = Ps * 0.1
+                            self.K = K
+                            self.Tw = Tw
+                            self.LC = LC * 0.1
+                            self.dataset = LoadImages(movie_path, img_size=self.imgsz, stride=self.stride)
+                            self.cnt_down = self.pre_cnt_down = 0
+                            self.frame_rate = 0
+                            self.counting(movie_path)
+                            TP = 26
+                            while self.is_movie_opened or self.queue_images:
+                                time.sleep(1.0)
+                            self.ho.writerow(["{0:0.2f}".format(self.Ps),'{0:0.2f}'.format(self.LC),self.Tw,self.K,'{:0.2f}'.format(self.frame_rate),'{0:0.3f}'.format(self.cnt_down/TP)])
+                            print('Ps,Tw,LC', self.Ps,self.Tw,self.LC)
+                            print("Recall:{0:0.2f}".format(self.cnt_down/TP))
+
 
         self.f.close()
 
@@ -188,7 +225,7 @@ class Counter(object):
         if self.counting_mode == 'v1':
             tracker = self.get_tracker(movie_path)
         elif self.counting_mode == 'v2':
-            t1 = threading.Thread(target=self.jumpQ, args=(movie_path,),daemon=True)
+            t1 = threading.Thread(target=self.jumpQ, args=(movie_path,))
             t1.start()
 
         for path, img, im0s, vid_cap, s in self.dataset:
@@ -228,26 +265,24 @@ class Counter(object):
         t = time.time()
         w = 0
         Pd = 1 # 検出する閾値
-        Ps = 0.1  # 閾値Pdを下げる量
-        Tw = 10 # 何frame検出しない場合閾値PdをPs分下げるのか
-        K = 10 # queueに溜めるframe数
-        LC = 10.0 / 20.0 # Pdの下限
-        stack_images = deque()
+        Ps = self.Ps  # 閾値Pdを下げる量
+        Tw = self.Tw # 何frame検出しない場合閾値PdをPs分下げるのか
+        K = self.K # queueに溜めるframe数
+        LC = self.LC # Pdの下限
+        jump_queue = deque(maxlen=K)
         while self.is_movie_opened or self.queue_images:
             if self.queue_images:
                 img = self.queue_images.popleft()
-                if len(stack_images) < K:
-                    stack_images.append(img)
-                    continue
 
                 Ran = random.random()
-                if Ran < 1:
+                if Ran < Pd:
                     cords = self.detect(img[:3])
                     if len(cords) >= 1:
                         Pd = 1
                         w = 0
-                        while stack_images:
-                            img = stack_images.popleft()
+                        self.cnt_down = tracker.update(cords,img[3])
+                        while jump_queue:
+                            img = jump_queue.popleft()
                             result = self.detect(img[:3])
                             self.cnt_down = tracker.update(result, img[3])
 
@@ -255,17 +290,15 @@ class Counter(object):
                         w += 1
                         if w >= Tw:
                             Pd = max(Pd - Ps, LC)
+                            w = 0
+                    self.cnt_down = tracker.update(cords, img[3])
                 else:
-                    if Tw > len(self.queue_images):
-                        self.queue_images.append(img)
-                    else:
-                        self.queue_images.append(img)
-                        self.queue_images.popleft()
+                    jump_queue.append(img)
 
 
         t = time.time()-t
-        frame_rate = self.frame_num / t
-        print(f'frame rate: {frame_rate:0.2f}fps')
+        self.frame_rate = self.frame_num / t
+        print(f'frame rate: {self.frame_rate:0.2f}fps')
 
 
     def detect(self, images):
@@ -307,7 +340,7 @@ class Counter(object):
                 dets_results.append(np.array(cord))
                 conf_results.append(conf)
 
-            if self.save_movie:
+            if self.save_movie or self.save_image:
                 self.make_movie_and_images(p, im0, dets_results, conf_results)
 
         return np.array(dets_results)
@@ -355,6 +388,6 @@ class Counter(object):
         self.vid_writer.write(im0)
         if self.cnt_down != self.pre_cnt_down:
             save_img_path = str(self.save_images_dir / p.name)  # img.jpg
-            save_image_path = save_img_path + '_' + str(self.cnt_down).zfill(4) + '.jpg'
+            save_image_path = save_img_path + '_' +str(self.number_exp).zfill(4)+'_'+ str(self.cnt_down).zfill(4) + '.jpg'
             cv2.imwrite(save_image_path, im0)
             self.pre_cnt_down = self.cnt_down
