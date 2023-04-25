@@ -149,26 +149,27 @@ class Counter(object):
             self.csv_writer = csv.writer(f)
             self.number_exp = 0
             K = 10
-            TP = 26
             with torch.no_grad():
                 movie_path  = self.movies.pop()
-                for Tw in range(1,21):
-                    for LC in [1] + list(range(5,100,5))+[99]:
-                        for Ps in [1] + list(range(5,100,5))+[99]:
-                            self.number_exp += 1
-                            self.Ps = Ps * 0.01
-                            self.K = K
-                            self.Tw = Tw
-                            self.LC = LC * 0.01
-                            self.dataset = LoadImages(movie_path, img_size=self.imgsz, stride=self.stride)
-                            self.cnt_down = self.pre_cnt_down = 0
-                            self.frame_rate = 0
-                            self.counting(movie_path)
-                            while self.is_movie_opened or self.queue_images:
-                                time.sleep(1.0)
-                            self.ho.writerow(["{0:0.2f}".format(self.Ps),'{0:0.2f}'.format(self.LC),self.Tw,self.K,'{:0.2f}'.format(self.frame_rate),'{0:0.3f}'.format(self.cnt_down/TP)])
-                            print('Ps,Tw,LC', self.Ps,self.Tw,self.LC)
-                            print("Recall:{0:0.2f}".format(self.cnt_down/TP))
+                for Tw in range(1,11):
+                    for Ps in [1] + list(range(5,100,5)):
+                        for K in [2,5,10,15,20,25]:
+                            for LC in [1] + list(range(5,100,5)):
+                                self.number_exp += 1
+                                self.Ps = Ps * 0.01
+                                self.K = K
+                                self.Tw = Tw
+                                self.LC = LC * 0.01
+                                self.dataset = LoadImages(movie_path, img_size=self.imgsz, stride=self.stride)
+                                self.cnt_down = self.pre_cnt_down = 0
+                                self.counting(movie_path)
+                                TP = 26
+                                while self.is_movie_opened or self.queue_images:
+                                    time.sleep(1.0)
+                                self.ho.writerow(["{0:0.2f}".format(self.Ps),'{0:0.2f}'.format(self.LC),self.Tw,self.K,'{:0.2f}'.format(self.frame_rate),'{0:0.3f}'.format(self.cnt_down/TP)])
+                                self.csv_writer.writerow([self.cnt_down])
+                                print('Ps,Tw,LC,K', self.Ps,self.Tw,self.LC,self.K)
+                                print("Recall:{0:0.2f}".format(self.cnt_down/TP))
 
 
 
@@ -220,7 +221,6 @@ class Counter(object):
         self.is_movie_opened = True
         self.queue_images = deque()
         self.frame_num = 0
-        t = time.time()
         if self.counting_mode == 'v1':
             tracker = self.get_tracker(movie_path)
         elif self.counting_mode == 'v2':
@@ -261,7 +261,6 @@ class Counter(object):
         """
         tracker = self.get_tracker(movie_path)
         # LC = self.l/self.frame_rate
-        t = time.time()
         w = 0
         Pd = 1 # 検出する閾値
         Ps = self.Ps  # 閾値Pdを下げる量
@@ -269,6 +268,7 @@ class Counter(object):
         K = self.K # queueに溜めるframe数
         LC = self.LC # Pdの下限
         jump_queue = deque(maxlen=K)
+        t = time.time()
         while self.is_movie_opened or self.queue_images:
             if self.queue_images:
                 img = self.queue_images.popleft()
@@ -294,8 +294,8 @@ class Counter(object):
                     jump_queue.append(img)
 
 
-        t = time.time()-t
-        self.frame_rate = self.frame_num / t
+        t2 = time.time()-t
+        self.frame_rate = self.frame_num / t2
         print(f'frame rate: {self.frame_rate:0.2f}fps')
 
 
