@@ -24,6 +24,10 @@ cudnn.benchmark = True
 
 VIDEO_FORMATS = ['mov', 'avi', 'mp4', 'mpg', 'mpeg', 'm4v', 'wmv', 'mkv']  # acceptable video suffixes
 
+Ps = 0.20
+LC = 0.30
+K = 10
+Tw = 10
 
 class Counter(object):
     def __init__(self, opt):
@@ -151,15 +155,16 @@ class Counter(object):
             K = 10
             with torch.no_grad():
                 movie_path  = self.movies.pop()
-                for Tw in range(1,11):
-                    for Ps in [1] + list(range(5,100,5)):
-                        for K in [2,5,10,15,20,25]:
-                            for LC in [1] + list(range(5,100,5)):
+                # for Tw in [15,20,25]:
+                #     for Ps in [1] + list(range(5,100,5)):
+                #         for K in [2,5,10,15,20,25]:
+                #             for LC in [1] + list(range(5,100,5)):
+                for iters in range(1000):
                                 self.number_exp += 1
-                                self.Ps = Ps * 0.01
-                                self.K = K
-                                self.Tw = Tw
-                                self.LC = LC * 0.01
+                                self.Ps = 0
+                                self.K = 10
+                                self.Tw = 10
+                                self.LC = 1
                                 self.dataset = LoadImages(movie_path, img_size=self.imgsz, stride=self.stride)
                                 self.cnt_down = self.pre_cnt_down = 0
                                 self.counting(movie_path)
@@ -259,6 +264,7 @@ class Counter(object):
         movie_path : str
             動画までの絶対パス
         """
+        global Ps,Tw,K,Lc
         tracker = self.get_tracker(movie_path)
         # LC = self.l/self.frame_rate
         w = 0
