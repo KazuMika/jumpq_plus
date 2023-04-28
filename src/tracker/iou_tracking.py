@@ -11,11 +11,8 @@ if True:
 
 
 class Iou_Tracker(object):
-    def __init__(self, max_age=2, line_down=None, save_image_dir=None, movie_id=None, movie_date='', base_name='', save_movie_dir=None):
+    def __init__(self, max_age=2, line_down=None, save_image_path=None):
         self.line_down = line_down
-        self.save_image_dir = save_image_dir
-        self.save_movie_dir = save_movie_dir
-        self.movie_id = movie_id
         self.cnt_down = 0
         self.frame_count = 0
         self.trashs = []
@@ -25,8 +22,7 @@ class Iou_Tracker(object):
         self.frame_count = 0
         self.fps_count = 0
         self.fpsWithTick = FpsWithTick()
-        self.movie_date = movie_date
-        self.base_name = base_name
+        self.save_image_path = save_image_path
 
     def intersection_over_union(self, boxA, boxB):
         xA = max(boxA[0], boxB[0])
@@ -74,7 +70,7 @@ class Iou_Tracker(object):
         else:
             return np.array([(i, int(y)) for i, y in enumerate(np.zeros(len(cords)))])
 
-        while(True):
+        while (True):
             true_array = ious_all > 0
             if True in true_array:
                 pass
@@ -94,7 +90,7 @@ class Iou_Tracker(object):
 
         return sets
 
-    def update(self,cords2=np.empty((0, 5))):
+    def update(self, cords2=np.empty((0, 5)), frame=None):
         sets = self.match_trash(cords2)
 
         if sets is not None:
@@ -114,7 +110,10 @@ class Iou_Tracker(object):
                                     self.cnt_down += 1
                                     i.state = False
                                     i.done = True
-                                    #print("ID:", i.id, 'crossed', self.cnt_down)
+                                    if self.save_image_path:
+                                        self.make_images(frame, i)
+
+                                    # print("ID:", i.id, 'crossed', self.cnt_down)
 
                 elif trash_id == 0 and _center[1] < self.line_down:
                     t = Trash(self.t_id, cord, _center, self.max_age)
@@ -133,3 +132,28 @@ class Iou_Tracker(object):
                 self.trashs.pop(index)
 
         return self.cnt_down
+
+    def make_images(self, frame, i):
+        i.state = False
+        i.done = True
+        cv2.circle(
+            frame, (i.center[0], i.center[1]), 3, (0, 0, 126), -1)
+        cv2.rectangle(
+            frame, (i.cords[0], i.cords[1]), (i.cords[2], i.cords[3]), (0, 252, 124), 2)
+        cv2.rectangle(frame, (i.cords[0], i.cords[1] - 20),
+                      (i.cords[0] + 170, i.cords[1]), (0, 252, 124), thickness=2)
+        cv2.rectangle(frame, (i.cords[0], i.cords[1] - 20),
+                      (i.cords[0] + 170, i.cords[1]), (0, 252, 124), -1)
+        str_down = 'COUNT:' + str(self.cnt_down)
+        cv2.putText(frame, str(
+            i.id) + " " + str(i.age), (i.cords[0], i.cords[1] - 5), self.font, 0.6, (0, 0, 0), 1, cv2.LINE_AA)
+        cv2.line(frame, (0, self.line_down), (int(
+
+            frame.shape[1]), self.line_down), (255, 0, 0), 2)
+        cv2.putText(
+            frame, str_down, (10, 70), self.font, 2.5, (0, 0, 0), 10, cv2.LINE_AA)
+        cv2.putText(
+            frame, str_down, (10, 70), self.font, 2.5, (255, 255, 255), 8, cv2.LINE_AA)
+        print("ID:", i.id, 'crossed', self.cnt_down)
+        path = self.save_image_path + "_{0:04d}.jpg".format(self.cnt_down)
+        cv2.imwrite(path, frame)

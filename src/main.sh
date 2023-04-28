@@ -17,8 +17,8 @@
 #python main.py --tracking_alg iou --counting_mode v1 --mode video
 
 
-# python main.py --tracking_alg iou --counting_mode v1 --mode video --source ~/DTCdataset/DTC_counting_test_movie_1_8
-python main.py --tracking_alg iou --counting_mode v2 --mode video --source ./sample_movie.mp4 --device 1
+python main.py --tracking_alg iou --counting_mode v2 --mode video --source ~/DTCdataset/DTC_counting_test_movie_1_8
+#python main.py --tracking_alg iou --counting_mode v2 --mode video --source ./sample_movie.mp4 --device 1
 
 # python main.py --tracking_alg iou --counting_mode v2 --mode video --source ./sample_movie.mp5
 # v1 & jetson nano & sort

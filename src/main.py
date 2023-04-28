@@ -34,8 +34,8 @@ def main():
     opt = parser.parse_args()
     print(opt)
     counter = Counter(opt)
-    #counter.excute()
-    counter.excute_grid_search()
+    counter.excute()
+    # counter.excute_grid_search()
 
 
 
