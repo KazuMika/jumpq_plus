@@ -24,10 +24,10 @@ cudnn.benchmark = True
 
 VIDEO_FORMATS = ['mov', 'avi', 'mp4', 'mpg', 'mpeg', 'm4v', 'wmv', 'mkv']  # acceptable video suffixes
 
-LC = 1
-Ps = 0
-Tw = 10
-K = 10
+LC = 0.25 # LC = 0.3
+Ps = 0.25 # Ps = 0.2
+Tw = 10 # Tw = 10
+K = 16 # K = 10
 
 
 class Counter(object):
@@ -163,9 +163,9 @@ class Counter(object):
             K = 10
             with torch.no_grad():
                 movie_path = self.movies.pop()
-                for Tw in range(1, 11):
+                for Tw in list(range(1, 11)) + [15,20,25]:
                     for Ps in [1] + list(range(5, 100, 5)):
-                        for K in [2, 5, 10, 15, 20, 25]:
+                        for K in [3,4,6,7,8,9]:
                             for LC in [1] + list(range(5, 100, 5)):
                                 self.number_exp += 1
                                 self.Ps = Ps * 0.01
@@ -202,12 +202,12 @@ class Counter(object):
         """
         height = self.dataset.height
         self.line_down = int(9 * (height / 10))
-        basename = os.path.basename(movie_path).replace('.mp4', '')
         if self.save_image:
+            basename = os.path.basename(movie_path).replace('.mp4', '')
             save_image_path = os.path.join(os.path.abspath('./'), self.save_images_dir, basename)
         else:
             save_image_path  = None
-        tracker = None
+
         if self.tracking_alg == 'sort':
             tracker = Sort(max_age=self.max_age,
                            line_down=self.line_down,
@@ -266,10 +266,10 @@ class Counter(object):
         # LC = self.l/self.frame_rate
         w = 0
         Pd = 1  # 検出する閾値
-        # Ps = 1  # 閾値Pdを下げる量
-        # Tw = 10  # 何frame検出しない場合閾値PdをPs分下げるのか
-        # K = 10  # queueに溜めるframe数
-        # LC = 1  # Pdの下限
+        # Ps = self.Ps  # 閾値Pdを下げる量
+        # Tw = self.Tw  # 何frame検出しない場合閾値PdをPs分下げるのか
+        # K = self.K  # queueに溜めるframe数
+        # LC = self.LC  # Pdの下限
         jump_queue = deque(maxlen=K)
         t = time.time()
         while self.is_movie_opened or self.queue_images:
@@ -285,7 +285,6 @@ class Counter(object):
                         while jump_queue:
                             img = jump_queue.popleft()
                             result = self.detect(img)
-                            if len(result) > 0:
                             self.cnt_down = tracker.update(result)
 
                     else:
