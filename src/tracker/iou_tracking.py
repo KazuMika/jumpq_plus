@@ -11,7 +11,7 @@ if True:
 
 
 class Iou_Tracker(object):
-    def __init__(self, max_age=2, line_down=None, save_image_path=None):
+    def __init__(self, max_age=2, line_down=None):
         self.line_down = line_down
         self.cnt_down = 0
         self.frame_count = 0
@@ -110,10 +110,7 @@ class Iou_Tracker(object):
                                     self.cnt_down += 1
                                     i.state = False
                                     i.done = True
-                                    if self.save_image_path:
-                                        self.make_images(frame, i)
-
-                                    # print("ID:", i.id, 'crossed', self.cnt_down)
+                                    print("ID:", i.id, 'crossed', self.cnt_down)
 
                 elif trash_id == 0 and _center[1] < self.line_down:
                     t = Trash(self.t_id, cord, _center, self.max_age)
@@ -133,27 +130,3 @@ class Iou_Tracker(object):
 
         return self.cnt_down
 
-    def make_images(self, frame, i):
-        i.state = False
-        i.done = True
-        cv2.circle(
-            frame, (i.center[0], i.center[1]), 3, (0, 0, 126), -1)
-        cv2.rectangle(
-            frame, (i.cords[0], i.cords[1]), (i.cords[2], i.cords[3]), (0, 252, 124), 2)
-        cv2.rectangle(frame, (i.cords[0], i.cords[1] - 20),
-                      (i.cords[0] + 170, i.cords[1]), (0, 252, 124), thickness=2)
-        cv2.rectangle(frame, (i.cords[0], i.cords[1] - 20),
-                      (i.cords[0] + 170, i.cords[1]), (0, 252, 124), -1)
-        str_down = 'COUNT:' + str(self.cnt_down)
-        cv2.putText(frame, str(
-            i.id) + " " + str(i.age), (i.cords[0], i.cords[1] - 5), self.font, 0.6, (0, 0, 0), 1, cv2.LINE_AA)
-        cv2.line(frame, (0, self.line_down), (int(
-
-            frame.shape[1]), self.line_down), (255, 0, 0), 2)
-        cv2.putText(
-            frame, str_down, (10, 70), self.font, 2.5, (0, 0, 0), 10, cv2.LINE_AA)
-        cv2.putText(
-            frame, str_down, (10, 70), self.font, 2.5, (255, 255, 255), 8, cv2.LINE_AA)
-        print("ID:", i.id, 'crossed', self.cnt_down)
-        path = self.save_image_path + "_{0:04d}.jpg".format(self.cnt_down)
-        cv2.imwrite(path, frame)

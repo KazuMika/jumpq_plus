@@ -1,4 +1,5 @@
 # Repo-specific GitIgnore ----------------------------------------------------------------------------------------------
+
 *.jpg
 *.jpeg
 *.png
@@ -19,6 +20,8 @@
 *.avi
 *.data
 *.json
+*.pt
+*.pth
 
 
 
@@ -30,15 +33,20 @@
 /src/weights/
 /src/data/
 /src/results/
-!data/images/zidane.jpg
-!data/images/bus.jpg
-!data/coco.names
-!data/coco_paper.names
-!data/coco.data
-!data/coco_*.data
-!data/coco_*.txt
-!data/trainvalno5k.shapes
-!data/*.sh
+/src/data
+!src/data/images/zidane.jpg
+!src/data/images/bus.jpg
+!src/data/coco.names
+!src/data/coco_paper.names
+!src/data/coco.data
+!src/data/coco_*.data
+!src/data/coco_*.txt
+!src/data/trainvalno5k.shapes
+!src/data/*.sh
+/.log
+/results
+/weights
+/data
 
 pycocotools/*
 results*.txt

@@ -6,7 +6,7 @@ from counter import Counter
 cudnn.benchmark = True
 
 
-def main():
+def predict():
     parser = argparse.ArgumentParser()
     parser.add_argument('--weights', nargs='+', type=str, default='./weights/best.pt', help='model.pt path(s)')
     parser.add_argument('--source', type=str, default='./sample_movie.mp4', help='source')  # file/folder, 0 for webcam
@@ -41,4 +41,4 @@ def main():
 
 if __name__ == "__main__":
 
-    main()
+    predict()

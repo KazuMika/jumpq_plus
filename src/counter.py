@@ -22,12 +22,13 @@ import time
 
 cudnn.benchmark = True
 
-VIDEO_FORMATS = ['mov', 'avi', 'mp4', 'mpg', 'mpeg', 'm4v', 'wmv', 'mkv']  # acceptable video suffixes
+VIDEO_FORMATS = ['mov', 'avi', 'mp4', 'mpg', 'mpeg',
+                 'm4v', 'wmv', 'mkv']  # acceptable video suffixes
 
-LC = 0.25 # LC = 0.3
-Ps = 0.25 # Ps = 0.2
-Tw = 10 # Tw = 10
-K = 16 # K = 10
+LC = 0.25  # LC = 0.3
+Ps = 0.25  # Ps = 0.2
+Tw = 10  # Tw = 10
+K = 16  # K = 10
 
 
 class Counter(object):
@@ -42,7 +43,8 @@ class Counter(object):
         self.font = cv2.FONT_HERSHEY_DUPLEX
         self.source, weights, self.view_img, self.save_txt, self.imgsz, self.save_movie = \
             opt.source, opt.weights, opt.view_img, opt.save_txt, opt.img_size, opt.save_movie
-        self.save_dir = Path(increment_path(Path(opt.project) / opt.name, exist_ok=opt.exist_ok))  # increment run
+        self.save_dir = Path(increment_path(
+            Path(opt.project) / opt.name, exist_ok=opt.exist_ok))  # increment run
         self.save_dir.mkdir(parents=True, exist_ok=True)  # make dir
         self.weights = weights
         (self.save_dir / 'detected_images').mkdir(parents=True, exist_ok=True)  # make dir
@@ -66,11 +68,15 @@ class Counter(object):
         self.tracking_alg = opt.tracking_alg
 
         # Load model
-        self.model = attempt_load(weights, device=self.device)  # load FP32 model
+        self.model = attempt_load(
+            weights, device=self.device)  # load FP32 model
         self.stride = int(self.model.stride.max())  # model stride
-        self.imgsz = check_img_size(self.imgsz, s=self.stride)  # check img_size
-        self.names = self.model.module.names if hasattr(self.model, 'module') else self.model.names
-        self.colors = [[random.randint(0, 255) for _ in range(3)] for _ in self.names]
+        self.imgsz = check_img_size(
+            self.imgsz, s=self.stride)  # check img_size
+        self.names = self.model.module.names if hasattr(
+            self.model, 'module') else self.model.names
+        self.colors = [[random.randint(0, 255)
+                        for _ in range(3)] for _ in self.names]
         self.vid_path, self.vid_writer = None, None
         self.dataset = None
 
@@ -111,7 +117,8 @@ class Counter(object):
         else:
             raise Exception(f'ERROR: {p} does not exist')
 
-        videos = [x for x in files if x.split('.')[-1].lower() in VIDEO_FORMATS]
+        videos = [x for x in files if x.split(
+            '.')[-1].lower() in VIDEO_FORMATS]
         return videos
 
     def excute(self):
@@ -120,18 +127,20 @@ class Counter(object):
         検出をする際はこのメソッドを使用する
         """
         with torch.no_grad():
-            with open(self.save_dir / 'count_result.csv', 'w') as f, open(self.save_dir / 'fps_result.csv','w') as f2:
+            with open(self.save_dir / 'count_result.csv', 'w') as f, open(self.save_dir / 'fps_result.csv', 'w') as f2:
                 if self.webcam:
                     movie = '0'
                     self.view_img = check_imshow()
                     cudnn.benchmark = True
-                    self.dataset = LoadStreams(movie, img_size=self.imgsz, stride=self.stride)
+                    self.dataset = LoadStreams(
+                        movie, img_size=self.imgsz, stride=self.stride)
                     self.counting(movie)
                 else:
                     for movie_path in self.movies:
                         self.csv_writer = csv.writer(f)
                         self.csv_writer_fps = csv.writer(f2)
-                        self.dataset = LoadImages(movie_path, img_size=self.imgsz, stride=self.stride)
+                        self.dataset = LoadImages(
+                            movie_path, img_size=self.imgsz, stride=self.stride)
                         self.image_save_stack = deque()
                         print(movie_path)
                         self.cnt_down = self.pre_cnt_down = 0
@@ -146,42 +155,42 @@ class Counter(object):
                         self.csv_writer_fps.writerow([self.frame_rate])
                         print(self.cnt_down)
 
-
-
-
-
     def excute_grid_search(self):
         """
         実際にcountingを実行する
         検出をする際はこのメソッドを使用する
         """
-        with open(self.save_dir / 'hyperparameter_optimization.csv', 'w') as hy,\
+        with open(self.save_dir / 'hyperparameter_optimization.csv', 'w') as hy, \
                 open(self.save_dir / 'count_result.csv', 'w') as f:
             self.ho = csv.writer(hy)
             self.csv_writer = csv.writer(f)
             self.number_exp = 0
             K = 10
             with torch.no_grad():
-                movie_path = self.movies.pop()
-                for Tw in list(range(1, 11)) + [15,20,25]:
+                movie_path = self.hs.pop()
+                for Tw in list(range(1, 11)) + [15, 20, 25]:
                     for Ps in [1] + list(range(5, 100, 5)):
-                        for K in [3,4,6,7,8,9]:
+                        for K in [3, 4, 6, 7, 8, 9]:
                             for LC in [1] + list(range(5, 100, 5)):
                                 self.number_exp += 1
                                 self.Ps = Ps * 0.01
                                 self.K = K
                                 self.Tw = Tw
                                 self.LC = LC * 0.01
-                                self.dataset = LoadImages(movie_path, img_size=self.imgsz, stride=self.stride)
+                                self.dataset = LoadImages(
+                                    movie_path, img_size=self.imgsz, stride=self.stride)
                                 self.cnt_down = self.pre_cnt_down = 0
                                 self.counting(movie_path)
                                 TP = 26
                                 while self.is_movie_opened or self.queue_images:
                                     time.sleep(1.0)
-                                self.ho.writerow(["{0:0.2f}".format(self.Ps), '{0:0.2f}'.format(self.LC), self.Tw, self.K, '{:0.2f}'.format(self.frame_rate), '{0:0.3f}'.format(self.cnt_down/TP)])
+                                self.ho.writerow(["{0:0.2f}".format(self.Ps), '{0:0.2f}'.format(self.LC),
+                                                  self.Tw, self.K, '{:0.2f}'.format(self.frame_rate), '{0:0.3f}'.format(self.cnt_down/TP)])
                                 self.csv_writer.writerow([self.cnt_down])
-                                print('Ps,Tw,LC,K', self.Ps, self.Tw, self.LC, self.K)
-                                print("Recall:{0:0.2f}".format(self.cnt_down/TP))
+                                print('Ps,Tw,LC,K', self.Ps,
+                                      self.Tw, self.LC, self.K)
+                                print("Recall:{0:0.2f}".format(
+                                    self.cnt_down/TP))
                                 print(self.cnt_down)
 
     def get_tracker(self, movie_path):
@@ -204,19 +213,13 @@ class Counter(object):
         self.line_down = int(9 * (height / 10))
         if self.save_image:
             basename = os.path.basename(movie_path).replace('.mp4', '')
-            save_image_path = os.path.join(os.path.abspath('./'), self.save_images_dir, basename)
-        else:
-            save_image_path  = None
-
         if self.tracking_alg == 'sort':
             tracker = Sort(max_age=self.max_age,
                            line_down=self.line_down,
-                           save_image_dir=save_image_path,
                            min_hits=3)
         else:
             tracker = Iou_Tracker(max_age=self.max_age,
-                                  line_down=self.line_down,
-                                  save_image_path=save_image_path)
+                                  line_down=self.line_down)
 
         return tracker
 
@@ -325,13 +328,16 @@ class Counter(object):
         conf_results = []
         for i, dets in enumerate(pred):  # detections per image
             if self.webcam:  # batch_size >= 1
-                p, s, im0, _ = path[i], '%g: ' % i, im0s[i].copy(), self.dataset.count
+                p, s, im0, _ = path[i], '%g: ' % i, im0s[i].copy(
+                ), self.dataset.count
             else:
-                p, s, im0, _ = path, '', im0s, getattr(self.dataset, 'frame', 0)
+                p, s, im0, _ = path, '', im0s, getattr(
+                    self.dataset, 'frame', 0)
 
             p = Path(p)  # to Path
             s += '%gx%g ' % img.shape[2:]  # print string
-            dets[:, :4] = scale_boxes(img.shape[2:], dets[:, :4], im0.shape).round()
+            dets[:, :4] = scale_boxes(
+                img.shape[2:], dets[:, :4], im0.shape).round()
             for *det, conf, cls in reversed(dets):
                 det = np.array([c.cpu().numpy() for c in det])
                 det = det.astype(np.int64)
@@ -339,8 +345,8 @@ class Counter(object):
                 dets_results.append(np.array(cord))
                 conf_results.append(conf)
 
-            # if self.save_movie or self.save_image:
-                # self.make_movie_and_images(p, im0, dets_results, conf_results)
+            if self.save_movie or self.save_image:
+                self.make_movie_and_images(p, im0, dets_results, conf_results)
 
         return np.array(dets_results)
 
@@ -384,12 +390,15 @@ class Counter(object):
             cv2.putText(im0, str(int(conf.item() * 100)) + '%',
                         (d[0], d[1] - 5), self.font, 0.6, (0, 0, 0), 1, cv2.LINE_AA)
 
-        # self.vid_writer.write(im0)
+        if self.save_movie:
+            self.vid_writer.write(im0)
         if self.cnt_down != self.pre_cnt_down:
             try:
                 save_img_path = str(self.save_images_dir / p.name)  # img.jpg
-                save_image_path = save_img_path + '_' + str(self.number_exp).zfill(4)+'_' + str(self.cnt_down).zfill(4) + '.jpg'
-                # cv2.imwrite(save_image_path, im0)
+                save_image_path = save_img_path + '_' + \
+                    str(self.number_exp).zfill(4)+'_' + \
+                    str(self.cnt_down).zfill(4) + '.jpg'
+                cv2.imwrite(save_image_path, im0)
                 self.image_save_stack.append([save_image_path, im0])
                 self.pre_cnt_down = self.cnt_down
             except Exception as e:

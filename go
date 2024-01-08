@@ -6,7 +6,6 @@ LOG_DIR="${HERE}"/.log
 if [ ! -d "${LOG_DIR}" ]; then 
     mkdir "${LOG_DIR}"; 
 fi
-
 which=${1:-run}
 THIS_START=$(date +%Y.%m.%d_%H.%M.%S)
 echo "[START: $which] [$THIS_START] ######################################################################"
@@ -19,21 +18,40 @@ if [ $# -gt 1 ]; then
     exit
 fi
 
-if [ "${which}" == get_files ]; then
-    START=297
-    END=333
-    for ((i=START;i<=END;i++)); do
-        pb="abc${i}"
-        atcoder-tools gen ${pb}
-    done
-    
+if [ "${which}" == "train" ]; then
+    weights="${HERE}/weights/best.pt"
+    project="${HERE}/results"
+    weights="${HERE}/src/data"
+
+    python ./src/train.py \
+        --weights "${weights}" \
+        --project "${project}"  2>&1 |  tee "$LOG_DIR/$which.log.$DATE"
 fi
 
-
-if [ "${which}" == change_name ]; then
+if [ "${which}" == "predict" ]; then
     src="${HERE}"
-    python utils/xutils.py --which "${which}" \
-        --src "${src}" 2>&1 |  tee "$LOG_DIR/$which.log.$DATE"
+    tracking_alg="iou"
+    counting_mode="v2"
+    mode="video"
+    src="${HERE}/data/DTC_counting_test_movie_1_8/"
+    src="${HERE}/sample_movie.mp4"
+    src="/home/quantan/DeepCounter2/sample_movie.mp4"
+    weights="${HERE}/weights/best.pt"
+    project="${HERE}/results"
+    save_image="--save_image"
+    save_movie="--save_movie"
+    device="0"
+
+    python ./src/main.py \
+        --tracking_alg "${tracking_alg}" \
+        --counting_mode "${counting_mode}" \
+        --mode "${mode}" \
+        --device ${device} \
+        --weights "${weights}" \
+        --project "${project}" \
+        "${save_image}" \
+        "${save_movie}" \
+        --source "${src}" 2>&1 |  tee "$LOG_DIR/$which.log.$DATE"
 fi
 
 
