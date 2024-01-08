@@ -19,13 +19,18 @@ if [ $# -gt 1 ]; then
 fi
 
 if [ "${which}" == "train" ]; then
-    weights="${HERE}/weights/best.pt"
-    project="${HERE}/results"
-    weights="${HERE}/src/data"
+    weights="yolov5s.pt"
+    # project="${HERE}/results/runs/train"
+    data="dtc.yaml"
+    batch_size=8
+    epochs=100
+    resume="--resume"
 
     python ./src/train.py \
         --weights "${weights}" \
-        --project "${project}"  2>&1 |  tee "$LOG_DIR/$which.log.$DATE"
+        --data "${data}" \
+        --batch-size ${batch_size} \
+        --epochs ${epochs} 2>&1 |  tee "$LOG_DIR/$which.log.$DATE"
 fi
 
 if [ "${which}" == "predict" ]; then

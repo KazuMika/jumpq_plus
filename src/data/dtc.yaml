@@ -1,5 +1,5 @@
 
-path: /home/quantan/DTCdataset/DTCcocoformat  # dataset root dir
+path: /home/quantan/data/DTCdataset/DTCcocoformat  # dataset root dir
 train: images/train  # train images (relative to 'path') 128 images
 val: images/test  # val images (relative to 'path') 128 images
 test:  # test images (optional)

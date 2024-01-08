@@ -57,9 +57,7 @@ FILE = Path(__file__).resolve()
 ROOT = FILE.parents[0]  # YOLOv5 root directory
 if str(ROOT) not in sys.path:
     sys.path.append(str(ROOT))  # add ROOT to PATH
-# ROOT = Path(os.path.abspath(ROOT, Path.cwd()))  # relative
-ROOT = Path().cwd().absolute()  # relative
-print(ROOT)
+ROOT = Path(os.path.relpath(ROOT, Path.cwd()))  # relative
 
 
 LOCAL_RANK = int(os.getenv('LOCAL_RANK', -1))  # https://pytorch.org/docs/stable/elastic/run.html
@@ -475,9 +473,6 @@ def parse_opt(known=False):
     parser.add_argument('--upload_dataset', nargs='?', const=True, default=False, help='Upload data, "val" option')
     parser.add_argument('--bbox_interval', type=int, default=-1, help='Set bounding-box image logging interval')
     parser.add_argument('--artifact_alias', type=str, default='latest', help='Version of dataset artifact to use')
-    a = parser.parse_args()
-    print(a.weights)
-    exit()
 
     return parser.parse_known_args()[0] if known else parser.parse_args()
 
