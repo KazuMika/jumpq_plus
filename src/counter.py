@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 from utils.torch_utils import select_device, smart_inference_mode
 from utils.plots import Annotator, colors, save_one_box
 from utils.general import (LOGGER, Profile, check_file, check_img_size, check_imshow, check_requirements, colorstr,
