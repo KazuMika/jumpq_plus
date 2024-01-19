@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import torch.backends.cudnn as cudnn
 import argparse
-from counter import Counter
+from exp import Exp
 
 cudnn.benchmark = True
 
@@ -33,10 +33,9 @@ def predict():
     parser.add_argument("--save_image", action='store_true', default=False, help='save image optim default is False')
     opt = parser.parse_args()
     print(opt)
-    counter = Counter(opt)
-    counter.excute()
-    #counter.excute_grid_search()
-
+    exp = Exp(opt)
+    exp.excute()
+    # exp.excute_grid_search()
 
 
 if __name__ == "__main__":

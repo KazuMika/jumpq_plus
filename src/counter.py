@@ -8,7 +8,6 @@ from models.experimental import attempt_load
 from pathlib import Path
 from tracker.iou_tracking import Iou_Tracker
 from tracker.sort import Sort
-import glob
 import torch.backends.cudnn as cudnn
 import torch
 import numpy as np
@@ -16,20 +15,10 @@ import cv2
 from collections import deque
 import random
 import threading
-import os
-import csv
 import time
 
 
 cudnn.benchmark = True
-
-VIDEO_FORMATS = ['mov', 'avi', 'mp4', 'mpg', 'mpeg',
-                 'm4v', 'wmv', 'mkv']  # acceptable video suffixes
-
-LC = 0.25  # LC = 0.3
-Ps = 0.25  # Ps = 0.2
-Tw = 10  # Tw = 10
-K = 16  # K = 10
 
 
 class Counter(object):
@@ -48,15 +37,6 @@ class Counter(object):
             Path(opt.project) / opt.name, exist_ok=opt.exist_ok))  # increment run
         self.save_dir.mkdir(parents=True, exist_ok=True)  # make dir
         self.weights = weights
-        (self.save_dir / 'detected_images').mkdir(parents=True, exist_ok=True)  # make dir
-        (self.save_dir / 'detected_movies').mkdir(parents=True, exist_ok=True)  # make dir
-        self.save_images_dir = self.save_dir / 'detected_images'
-        self.save_movies_dir = self.save_dir / 'detected_movies'
-        self.mode = opt.mode
-        self.counting_mode = opt.counting_mode
-        self.frame_num = 0
-        self.save_image = opt.save_image
-        self.number_exp = 0
 
         # for jumpQ
         self.is_movie_opened = True
@@ -79,7 +59,13 @@ class Counter(object):
         self.colors = [[random.randint(0, 255)
                         for _ in range(3)] for _ in self.names]
         self.vid_path, self.vid_writer = None, None
-        self.dataset = None
+
+        self.LC = 0.25  # LC = 0.3
+        self.Ps = 0.25  # Ps = 0.2
+        self.Tw = 10  # Tw = 10
+        self.K = 16  # K = 10
+        self.w = 0
+        self.Pd = 1
 
         if self.half:
             self.model.half()  # to FP16
@@ -143,8 +129,6 @@ class Counter(object):
         """
         height = self.dataset.height
         self.line_down = int(9 * (height / 10))
-        if self.save_image:
-            basename = os.path.basename(movie_path).replace('.mp4', '')
         if self.tracking_alg == 'sort':
             tracker = Sort(max_age=self.max_age,
                            line_down=self.line_down,
@@ -168,12 +152,12 @@ class Counter(object):
         """
         tracker = self.get_tracker(movie_path)
         # LC = self.l/self.frame_rate
-        w = 0
-        Pd = 1  # 検出する閾値
         # Ps = self.Ps  # 閾値Pdを下げる量
         # Tw = self.Tw  # 何frame検出しない場合閾値PdをPs分下げるのか
         # K = self.K  # queueに溜めるframe数
         # LC = self.LC  # Pdの下限
+        # w = 0
+        # Pd = 1
         jump_queue = deque(maxlen=K)
         t = time.time()
         while self.is_movie_opened or self.queue_images:
@@ -181,26 +165,26 @@ class Counter(object):
                 img = self.queue_images.popleft()
 
                 Ran = random.random()
-                if Ran < Pd:
+                if Ran < self.Pd:
                     result_ = self.detect(img)
                     if len(result_) >= 1:
-                        Pd = 1
-                        w = 0
+                        self.Pd = 1
+                        self.w = 0
                         while jump_queue:
                             img = jump_queue.popleft()
                             result = self.detect(img)
                             self.cnt_down = tracker.update(result)
 
                     else:
-                        w += 1
-                        if w >= Tw:
-                            Pd = max(Pd - Ps, LC)
-                            w = 0
+                        self.w += 1
+                        if self.w >= self.Tw:
+                            self.Pd = max(self.Pd - self.Ps, self.LC)
+                            self.w = 0
                     self.cnt_down = tracker.update(result_)
                 else:
                     jump_queue.append(img)
 
-        t2 = time.time()-t
+        t2 = time.time() - t
         self.frame_rate = self.frame_num / t2
         print(f'frame rate: {self.frame_rate:0.2f}fps')
 
@@ -297,7 +281,7 @@ class Counter(object):
             try:
                 save_img_path = str(self.save_images_dir / p.name)  # img.jpg
                 save_image_path = save_img_path + '_' + \
-                    str(self.number_exp).zfill(4)+'_' + \
+                    str(self.number_exp).zfill(4) + '_' + \
                     str(self.cnt_down).zfill(4) + '.jpg'
                 cv2.imwrite(save_image_path, im0)
                 self.image_save_stack.append([save_image_path, im0])
