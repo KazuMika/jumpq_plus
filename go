@@ -10,6 +10,10 @@ which=${1:-run}
 THIS_START=$(date +%Y.%m.%d_%H.%M.%S)
 echo "[START: $which] [$THIS_START] ######################################################################"
 
+
+export PYTHONPATH=${PYTHONPATH}:${HERE}/src/yolov5
+export PYTHONPATH=${PYTHONPATH}:${HERE}/src/
+
 if [ $# -gt 1 ]; then
     script=$0
     for which in "$@"; do
@@ -26,7 +30,7 @@ if [ "${which}" == "train" ]; then
     epochs=100
     resume="--resume"
 
-    python ./src/train.py \
+    python ./src/yolov5/train.py \
         --weights "${weights}" \
         --data "${data}" \
         --batch-size ${batch_size} \

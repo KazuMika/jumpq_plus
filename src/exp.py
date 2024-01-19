@@ -1,14 +1,10 @@
 # -*- coding: utf-8 -*-
-from utils.torch_utils import select_device, smart_inference_mode
-from utils.plots import Annotator, colors, save_one_box
-from utils.general import (LOGGER, Profile, check_file, check_img_size, check_imshow, check_requirements, colorstr,
-                           increment_path, non_max_suppression, print_args, scale_boxes, strip_optimizer, xyxy2xywh)
-from utils.dataloaders import IMG_FORMATS, VID_FORMATS, LoadImages, LoadScreenshots, LoadStreams
+from utils.general import check_imshow, increment_path
+from utils.dataloaders import LoadImages, LoadStreams
 from pathlib import Path
 import glob
 import torch.backends.cudnn as cudnn
 import torch
-import cv2
 from collections import deque
 import os
 import csv
@@ -28,25 +24,26 @@ class Exp(object):
         Initialize
         """
         self.opt = opt  # config
-        self.cnt_down = self.pre_cnt_down = 0
-        self.line_down = 0
-        self.font = cv2.FONT_HERSHEY_DUPLEX
-        self.source, weights, self.view_img, self.save_txt, self.imgsz, self.save_movie = \
-            opt.source, opt.weights, opt.view_img, opt.save_txt, opt.img_size, opt.save_movie
+        self.source, self.view_img, self.save_txt, self.imgsz, self.save_movie = \
+            opt.source, opt.view_img, opt.save_txt, opt.img_size, opt.save_movie
         self.save_dir = Path(increment_path(
             Path(opt.project) / opt.name, exist_ok=opt.exist_ok))  # increment run
         self.save_dir.mkdir(parents=True, exist_ok=True)  # make dir
-        self.weights = weights
         (self.save_dir / 'detected_images').mkdir(parents=True, exist_ok=True)  # make dir
         (self.save_dir / 'detected_movies').mkdir(parents=True, exist_ok=True)  # make dir
         self.save_images_dir = self.save_dir / 'detected_images'
         self.save_movies_dir = self.save_dir / 'detected_movies'
-        self.mode = opt.mode
         self.counting_mode = opt.counting_mode
         self.frame_num = 0
         self.save_image = opt.save_image
         self.number_exp = 0
         self.counter = Counter(self.opt)
+        if opt.mode == 'webcam':
+            self.movies = []
+            self.webcam = True
+        else:
+            self.movies = self.get_movies(self.source)
+            self.webcam = False
 
     def get_movies(self, path):
         """
@@ -98,17 +95,16 @@ class Exp(object):
                             movie_path, img_size=self.imgsz, stride=self.stride)
                         self.image_save_stack = deque()
                         print(movie_path)
-                        self.cnt_down = self.pre_cnt_down = 0
                         self.counter.counting(movie_path)
                         if self.counting_mode == 'v1':
-                            self.csv_writer.writerow([self.cnt_down])
+                            self.csv_writer.writerow([self.counter.cnt_down])
                         else:
                             while self.is_movie_opened or self.queue_images:
                                 time.sleep(2.0)
 
-                        self.csv_writer.writerow([self.cnt_down])
-                        self.csv_writer_fps.writerow([self.frame_rate])
-                        print(self.cnt_down)
+                        self.csv_writer.writerow([self.counter.cnt_down])
+                        self.csv_writer_fps.writerow([self.counter.frame_rate])
+                        print(self.counter.cnt_down)
 
     def excute_grid_search(self):
         """
@@ -134,16 +130,12 @@ class Exp(object):
                                 self.LC = LC * 0.01
                                 self.dataset = LoadImages(
                                     movie_path, img_size=self.imgsz, stride=self.stride)
-                                self.cnt_down = self.pre_cnt_down = 0
                                 self.counter.counting(movie_path)
                                 TP = 26
                                 while self.is_movie_opened or self.queue_images:
                                     time.sleep(1.0)
                                 self.ho.writerow(["{0:0.2f}".format(self.Ps), '{0:0.2f}'.format(self.LC),
-                                                  self.Tw, self.K, '{:0.2f}'.format(self.frame_rate), '{0:0.3f}'.format(self.cnt_down / TP)])
-                                self.csv_writer.writerow([self.cnt_down])
+                                                  self.Tw, self.K, '{:0.2f}'.format(self.counter.frame_rate), '{0:0.3f}'.format(self.counter.cnt_down / TP)])
+                                self.csv_writer.writerow([self.counter.cnt_down])
                                 print('Ps,Tw,LC,K', self.Ps,
                                       self.Tw, self.LC, self.K)
-                                print("Recall:{0:0.2f}".format(
-                                    self.cnt_down / TP))
-                                print(self.cnt_down)

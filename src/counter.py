@@ -1,9 +1,6 @@
 # -*- coding: utf-8 -*-
-from utils.torch_utils import select_device, smart_inference_mode
-from utils.plots import Annotator, colors, save_one_box
-from utils.general import (LOGGER, Profile, check_file, check_img_size, check_imshow, check_requirements, colorstr,
-                           increment_path, non_max_suppression, print_args, scale_boxes, strip_optimizer, xyxy2xywh)
-from utils.dataloaders import IMG_FORMATS, VID_FORMATS, LoadImages, LoadScreenshots, LoadStreams
+from utils.torch_utils import select_device
+from utils.general import (check_img_size, non_max_suppression, scale_boxes)
 from models.experimental import attempt_load
 from pathlib import Path
 from tracker.iou_tracking import Iou_Tracker
@@ -31,11 +28,8 @@ class Counter(object):
         self.cnt_down = self.pre_cnt_down = 0
         self.line_down = 0
         self.font = cv2.FONT_HERSHEY_DUPLEX
-        self.source, weights, self.view_img, self.save_txt, self.imgsz, self.save_movie = \
+        _, weights, self.view_img, self.save_txt, self.imgsz, self.save_movie = \
             opt.source, opt.weights, opt.view_img, opt.save_txt, opt.img_size, opt.save_movie
-        self.save_dir = Path(increment_path(
-            Path(opt.project) / opt.name, exist_ok=opt.exist_ok))  # increment run
-        self.save_dir.mkdir(parents=True, exist_ok=True)  # make dir
         self.weights = weights
 
         # for jumpQ
@@ -73,12 +67,6 @@ class Counter(object):
         if self.device.type != 'cpu':
             self.model(torch.zeros(1, 3, self.imgsz, self.imgsz).to(
                 self.device).type_as(next(self.model.parameters())))  # run once
-        if self.mode == 'webcam':
-            self.movies = []
-            self.webcam = True
-        else:
-            self.movies = self.get_movies(self.source)
-            self.webcam = False
 
     def counting(self, movie_path):
         """
