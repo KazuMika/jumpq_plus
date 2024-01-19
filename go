@@ -44,7 +44,6 @@ if [ "${which}" == "predict" ]; then
     mode="video"
     src="${HERE}/data/DTC_counting_test_movie_1_8/"
     src="${HERE}/sample_movie.mp4"
-    src="/home/quantan/DeepCounter2/sample_movie.mp4"
     weights="${HERE}/weights/best.pt"
     project="${HERE}/results"
     save_image="--save_image"

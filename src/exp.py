@@ -38,12 +38,13 @@ class Exp(object):
         self.save_image = opt.save_image
         self.number_exp = 0
         self.counter = Counter(self.opt)
+        self.stride = int(self.counter.model.stride.max())  # model stride
         if opt.mode == 'webcam':
             self.movies = []
-            self.webcam = True
+            self.counter.jwebcam = True
         else:
             self.movies = self.get_movies(self.source)
-            self.webcam = False
+            self.counter.webcam = False
 
     def get_movies(self, path):
         """
@@ -80,18 +81,18 @@ class Exp(object):
         """
         with torch.no_grad():
             with open(self.save_dir / 'count_result.csv', 'w') as f, open(self.save_dir / 'fps_result.csv', 'w') as f2:
-                if self.webcam:
+                if self.counter.webcam:
                     movie = '0'
                     self.view_img = check_imshow()
                     cudnn.benchmark = True
-                    self.dataset = LoadStreams(
+                    self.counter.dataset = LoadStreams(
                         movie, img_size=self.imgsz, stride=self.stride)
                     self.counter.counting(movie)
                 else:
                     for movie_path in self.movies:
                         self.csv_writer = csv.writer(f)
                         self.csv_writer_fps = csv.writer(f2)
-                        self.dataset = LoadImages(
+                        self.counter.dataset = LoadImages(
                             movie_path, img_size=self.imgsz, stride=self.stride)
                         self.image_save_stack = deque()
                         print(movie_path)
@@ -136,6 +137,7 @@ class Exp(object):
                                     time.sleep(1.0)
                                 self.ho.writerow(["{0:0.2f}".format(self.Ps), '{0:0.2f}'.format(self.LC),
                                                   self.Tw, self.K, '{:0.2f}'.format(self.counter.frame_rate), '{0:0.3f}'.format(self.counter.cnt_down / TP)])
-                                self.csv_writer.writerow([self.counter.cnt_down])
+                                self.csv_writer.writerow(
+                                    [self.counter.cnt_down])
                                 print('Ps,Tw,LC,K', self.Ps,
                                       self.Tw, self.LC, self.K)

@@ -22,7 +22,7 @@ class Iou_Tracker(object):
         self.frame_count = 0
         self.fps_count = 0
         self.fpsWithTick = FpsWithTick()
-        self.save_image_path = save_image_path
+        # self.save_image_path = save_image_path
 
     def intersection_over_union(self, boxA, boxB):
         xA = max(boxA[0], boxB[0])
@@ -129,4 +129,3 @@ class Iou_Tracker(object):
                 self.trashs.pop(index)
 
         return self.cnt_down
-

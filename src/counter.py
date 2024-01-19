@@ -41,6 +41,7 @@ class Counter(object):
         self.half = self.device.type != 'cpu'  # half precision only supported on CUDA
         self.max_age = 2 if self.opt.tracking_alg == 'sort' else 3
         self.tracking_alg = opt.tracking_alg
+        self.counting_mode = opt.counting_mode
 
         # Load model
         self.model = attempt_load(
@@ -146,7 +147,7 @@ class Counter(object):
         # LC = self.LC  # Pdの下限
         # w = 0
         # Pd = 1
-        jump_queue = deque(maxlen=K)
+        jump_queue = deque(maxlen=self.K)
         t = time.time()
         while self.is_movie_opened or self.queue_images:
             if self.queue_images:
