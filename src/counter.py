@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 from utils.torch_utils import select_device
-from utils.general import (check_img_size, non_max_suppression, scale_boxes)
+from utils.general import (
+    check_img_size, non_max_suppression, scale_boxes, increment_path)
 from models.experimental import attempt_load
 from pathlib import Path
 from tracker.iou_tracking import Iou_Tracker
@@ -32,9 +33,19 @@ class Counter(object):
             opt.source, opt.weights, opt.view_img, opt.save_txt, opt.img_size, opt.save_movie
         self.weights = weights
 
+        self.save_dir = Path(increment_path(
+            Path(opt.project) / opt.name, exist_ok=opt.exist_ok))  # increment run
+        self.save_dir.mkdir(parents=True, exist_ok=True)  # make dir
+        (self.save_dir / 'detected_images').mkdir(parents=True, exist_ok=True)  # make dir
+        (self.save_dir / 'detected_movies').mkdir(parents=True, exist_ok=True)  # make dir
+        self.save_images_dir = self.save_dir / 'detected_images'
+        self.save_movies_dir = self.save_dir / 'detected_movies'
+
         # for jumpQ
         self.is_movie_opened = True
         self.queue_images = deque()
+
+        self.is_movie_opened = False
 
         # set_logging()
         self.device = select_device(opt.device)
@@ -42,6 +53,7 @@ class Counter(object):
         self.max_age = 2 if self.opt.tracking_alg == 'sort' else 3
         self.tracking_alg = opt.tracking_alg
         self.counting_mode = opt.counting_mode
+        self.number_exp = 0
 
         # Load model
         self.model = attempt_load(
@@ -75,6 +87,7 @@ class Counter(object):
         """
         self.is_movie_opened = True
         self.queue_images = deque()
+        self.image_save_stack = deque()
         self.frame_num = 0
         if self.counting_mode == 'v1':
             tracker = self.get_tracker(movie_path)

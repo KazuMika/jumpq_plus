@@ -26,17 +26,9 @@ class Exp(object):
         self.opt = opt  # config
         self.source, self.view_img, self.save_txt, self.imgsz, self.save_movie = \
             opt.source, opt.view_img, opt.save_txt, opt.img_size, opt.save_movie
-        self.save_dir = Path(increment_path(
-            Path(opt.project) / opt.name, exist_ok=opt.exist_ok))  # increment run
-        self.save_dir.mkdir(parents=True, exist_ok=True)  # make dir
-        (self.save_dir / 'detected_images').mkdir(parents=True, exist_ok=True)  # make dir
-        (self.save_dir / 'detected_movies').mkdir(parents=True, exist_ok=True)  # make dir
-        self.save_images_dir = self.save_dir / 'detected_images'
-        self.save_movies_dir = self.save_dir / 'detected_movies'
         self.counting_mode = opt.counting_mode
         self.frame_num = 0
         self.save_image = opt.save_image
-        self.number_exp = 0
         self.counter = Counter(self.opt)
         self.stride = int(self.counter.model.stride.max())  # model stride
         if opt.mode == 'webcam':
@@ -80,7 +72,8 @@ class Exp(object):
         検出をする際はこのメソッドを使用する
         """
         with torch.no_grad():
-            with open(self.save_dir / 'count_result.csv', 'w') as f, open(self.save_dir / 'fps_result.csv', 'w') as f2:
+            with open(self.counter.save_dir / 'count_result.csv', 'w') as f, \
+                    open(self.counter.save_dir / 'fps_result.csv', 'w') as f2:
                 if self.counter.webcam:
                     movie = '0'
                     self.view_img = check_imshow()
@@ -94,13 +87,12 @@ class Exp(object):
                         self.csv_writer_fps = csv.writer(f2)
                         self.counter.dataset = LoadImages(
                             movie_path, img_size=self.imgsz, stride=self.stride)
-                        self.image_save_stack = deque()
                         print(movie_path)
                         self.counter.counting(movie_path)
                         if self.counting_mode == 'v1':
                             self.csv_writer.writerow([self.counter.cnt_down])
                         else:
-                            while self.is_movie_opened or self.queue_images:
+                            while self.counter.is_movie_opened or self.counter.queue_images:
                                 time.sleep(2.0)
 
                         self.csv_writer.writerow([self.counter.cnt_down])
@@ -112,11 +104,11 @@ class Exp(object):
         実際にcountingを実行する
         検出をする際はこのメソッドを使用する
         """
-        with open(self.save_dir / 'hyperparameter_optimization.csv', 'w') as hy, \
-                open(self.save_dir / 'count_result.csv', 'w') as f:
+        with open(self.counter.save_dir / 'hyperparameter_optimization.csv', 'w') as hy, \
+                open(self.counter.save_dir / 'count_result.csv', 'w') as f:
             self.ho = csv.writer(hy)
             self.csv_writer = csv.writer(f)
-            self.number_exp = 0
+            self.counter.number_exp = 0
             K = 10
             with torch.no_grad():
                 movie_path = self.hs.pop()
@@ -124,7 +116,7 @@ class Exp(object):
                     for Ps in [1] + list(range(5, 100, 5)):
                         for K in [3, 4, 6, 7, 8, 9]:
                             for LC in [1] + list(range(5, 100, 5)):
-                                self.number_exp += 1
+                                self.counter.number_exp += 1
                                 self.Ps = Ps * 0.01
                                 self.K = K
                                 self.Tw = Tw
@@ -133,7 +125,7 @@ class Exp(object):
                                     movie_path, img_size=self.imgsz, stride=self.stride)
                                 self.counter.counting(movie_path)
                                 TP = 26
-                                while self.is_movie_opened or self.queue_images:
+                                while self.is_movie_opened or self.counter.queue_images:
                                     time.sleep(1.0)
                                 self.ho.writerow(["{0:0.2f}".format(self.Ps), '{0:0.2f}'.format(self.LC),
                                                   self.Tw, self.K, '{:0.2f}'.format(self.counter.frame_rate), '{0:0.3f}'.format(self.counter.cnt_down / TP)])
