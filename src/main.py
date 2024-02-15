@@ -6,8 +6,9 @@ from exp import Exp
 cudnn.benchmark = True
 
 
-def predict():
+def parse_args():
     parser = argparse.ArgumentParser()
+    parser.add_argument('--which', type=str, default=None, help='task')
     parser.add_argument('--weights', nargs='+', type=str, default='./weights/best.pt', help='model.pt path(s)')
     parser.add_argument('--source', type=str, default='./sample_movie.mp4', help='source')  # file/folder, 0 for webcam
     parser.add_argument('--img-size', type=int, default=640, help='inference size (pixels)')
@@ -32,12 +33,17 @@ def predict():
     parser.add_argument("--save_movie", action='store_true', default=False, help='save movie optim default is False')
     parser.add_argument("--save_image", action='store_true', default=False, help='save image optim default is False')
     opt = parser.parse_args()
-    print(opt)
-    exp = Exp(opt)
-    exp.excute()
-    # exp.excute_grid_search()
+    return opt
+
+
+def main():
+    opt = parse_args()
+    if opt.which == "predict":
+        exp = Exp(opt)
+        exp.excute()
+        # exp.excute_grid_search()
 
 
 if __name__ == "__main__":
 
-    predict()
+    main()
